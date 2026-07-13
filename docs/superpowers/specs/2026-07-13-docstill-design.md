@@ -1,4 +1,4 @@
-# docparse: schema 驱动的文档抽取中间层设计
+# docstill: schema 驱动的文档抽取中间层设计
 
 日期: 2026-07-13
 状态: 已确认
@@ -35,9 +35,9 @@ IntelliDocPro 是一个文档处理平台（现有产物是一个纯 UI 原型 `
 ## 目录结构
 
 ```
-docparse/
-  pyproject.toml            # 包名 docparse, 可独立安装
-  src/docparse/
+docstill/
+  pyproject.toml            # 包名 docstill, 可独立安装
+  src/docstill/
     __init__.py             # 顶层 API: extract(), suggest_schema()
     schema.py               # FieldType / FieldSpec / ExtractionSchema
     result.py               # FieldValue / ExtractionResult
@@ -116,7 +116,7 @@ class Extractor(ABC):
 
 ### ClaudeExtractor
 
-- SDK: `anthropic`，默认模型 `claude-opus-4-8`（`DOCPARSE_CLAUDE_MODEL` 可覆盖）
+- SDK: `anthropic`，默认模型 `claude-opus-4-8`（`DOCSTILL_CLAUDE_MODEL` 可覆盖）
 - PDF 用 `document` content block（base64），图片用 `image` block
 - structured outputs: `client.messages.parse()` + Pydantic 输出模型
 - 已知取舍: citations 与 structured outputs 不能同用（API 返回 400），因此来源定位由模型在输出 JSON 中自报（页码 + 区域描述），不用 citations
@@ -124,7 +124,7 @@ class Extractor(ABC):
 ### OpenAIExtractor / AzureOpenAIExtractor
 
 - 共用 `openai_common.py`: Responses API 的 `input_file`（base64 data URL）/ `input_image` 构造、`responses.parse()` + Pydantic、结果解析
-- OpenAI 原生: `OPENAI_API_KEY`，默认模型 `gpt-5.6-terra`（2026-07 最新 GPT-5.6 家族的平衡档，支持 PDF 输入 + structured outputs；`DOCPARSE_OPENAI_MODEL` 可覆盖，如 `gpt-5.6-sol` 冲精度、`gpt-5.6-luna` 降成本）
+- OpenAI 原生: `OPENAI_API_KEY`，默认模型 `gpt-5.6-terra`（2026-07 最新 GPT-5.6 家族的平衡档，支持 PDF 输入 + structured outputs；`DOCSTILL_OPENAI_MODEL` 可覆盖，如 `gpt-5.6-sol` 冲精度、`gpt-5.6-luna` 降成本）
 - Azure: `AZURE_OPENAI_ENDPOINT` / `AZURE_OPENAI_API_KEY` / `AZURE_OPENAI_DEPLOYMENT`，用 v1 API；模型参数填 deployment 名
 - v1 只用 base64 直传，不用 Files API（规避 Azure `purpose="user_data"` 未支持的问题）
 
@@ -144,12 +144,12 @@ class Extractor(ABC):
 ## 错误处理
 
 ```python
-class DocparseError(Exception): ...
-class UnsupportedDocumentType(DocparseError): ...
-class DocumentTooLarge(DocparseError): ...
-class SchemaValidationError(DocparseError): ...
-class EngineError(DocparseError): ...   # 包 API 异常, 附引擎名/request id
-class EngineNotConfigured(DocparseError): ...  # 缺环境变量
+class DocstillError(Exception): ...
+class UnsupportedDocumentType(DocstillError): ...
+class DocumentTooLarge(DocstillError): ...
+class SchemaValidationError(DocstillError): ...
+class EngineError(DocstillError): ...   # 包 API 异常, 附引擎名/request id
+class EngineNotConfigured(DocstillError): ...  # 缺环境变量
 ```
 
 抽取失败的单个字段不抛异常: `value=None, needs_review=True`。整个请求失败（API 错误、超时）抛 `EngineError`。
@@ -174,7 +174,7 @@ class EngineNotConfigured(DocparseError): ...  # 缺环境变量
 | 变量 | 用途 |
 |---|---|
 | `ANTHROPIC_API_KEY` | claude 引擎 |
-| `DOCPARSE_CLAUDE_MODEL` | 可选，默认 `claude-opus-4-8` |
+| `DOCSTILL_CLAUDE_MODEL` | 可选，默认 `claude-opus-4-8` |
 | `OPENAI_API_KEY` | openai 引擎 |
-| `DOCPARSE_OPENAI_MODEL` | 可选，默认 `gpt-5.6-terra` |
+| `DOCSTILL_OPENAI_MODEL` | 可选，默认 `gpt-5.6-terra` |
 | `AZURE_OPENAI_ENDPOINT` / `AZURE_OPENAI_API_KEY` / `AZURE_OPENAI_DEPLOYMENT` | azure_openai 引擎 |
