@@ -124,7 +124,7 @@ class Extractor(ABC):
 ### OpenAIExtractor / AzureOpenAIExtractor
 
 - 共用 `openai_common.py`: Responses API 的 `input_file`（base64 data URL）/ `input_image` 构造、`responses.parse()` + Pydantic、结果解析
-- OpenAI 原生: `OPENAI_API_KEY`，默认模型 `gpt-4o`（文档确认支持 PDF 输入 + structured outputs，`DOCPARSE_OPENAI_MODEL` 可覆盖为更新的模型）
+- OpenAI 原生: `OPENAI_API_KEY`，默认模型 `gpt-5.6-terra`（2026-07 最新 GPT-5.6 家族的平衡档，支持 PDF 输入 + structured outputs；`DOCPARSE_OPENAI_MODEL` 可覆盖，如 `gpt-5.6-sol` 冲精度、`gpt-5.6-luna` 降成本）
 - Azure: `AZURE_OPENAI_ENDPOINT` / `AZURE_OPENAI_API_KEY` / `AZURE_OPENAI_DEPLOYMENT`，用 v1 API；模型参数填 deployment 名
 - v1 只用 base64 直传，不用 Files API（规避 Azure `purpose="user_data"` 未支持的问题）
 
@@ -176,5 +176,5 @@ class EngineNotConfigured(DocparseError): ...  # 缺环境变量
 | `ANTHROPIC_API_KEY` | claude 引擎 |
 | `DOCPARSE_CLAUDE_MODEL` | 可选，默认 `claude-opus-4-8` |
 | `OPENAI_API_KEY` | openai 引擎 |
-| `DOCPARSE_OPENAI_MODEL` | 可选，默认 `gpt-4o` |
+| `DOCPARSE_OPENAI_MODEL` | 可选，默认 `gpt-5.6-terra` |
 | `AZURE_OPENAI_ENDPOINT` / `AZURE_OPENAI_API_KEY` / `AZURE_OPENAI_DEPLOYMENT` | azure_openai 引擎 |
