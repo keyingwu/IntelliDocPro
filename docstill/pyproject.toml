@@ -1,0 +1,35 @@
+[project]
+name = "docstill"
+version = "0.1.0"
+description = "Schema-driven document field extraction with pluggable LLM engines (Claude / OpenAI / Azure OpenAI)"
+requires-python = ">=3.10"
+dependencies = [
+    "pydantic>=2.7",
+    "anthropic>=0.60",
+    "openai>=1.90",
+]
+
+[project.optional-dependencies]
+server = [
+    "fastapi>=0.110",
+    "uvicorn>=0.30",
+    "python-multipart>=0.0.9",
+]
+dev = [
+    "pytest>=8",
+    "httpx>=0.27",
+    "fastapi>=0.110",
+    "uvicorn>=0.30",
+    "python-multipart>=0.0.9",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/docstill"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
