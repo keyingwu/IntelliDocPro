@@ -60,6 +60,26 @@ def test_extract_invoice(engine):
     assert result.usage.get("input_tokens", 0) > 0
 
 
+def test_bulk_live_openai():
+    if not _configured("openai"):
+        pytest.skip("openai credentials not configured")
+
+    snapshots = []
+    report = docstill.bulk_extract(
+        [("inv-1.pdf", INVOICE_PDF), ("inv-2.pdf", INVOICE_PDF), ("bad.txt", b"nope")],
+        SCHEMA,
+        engine="openai",
+        model="gpt-5.6-luna",
+        on_update=snapshots.append,
+    )
+    assert report.status == "done"
+    assert report.completed == 2
+    assert report.failed == 1
+    assert report.total_cost_usd > 0
+    assert report.entries[2].status == "failed"
+    assert any(s.status == "running" for s in snapshots)
+
+
 @pytest.mark.parametrize("engine", ["claude", "openai", "azure_openai"])
 def test_suggest_schema(engine):
     if not _configured(engine):

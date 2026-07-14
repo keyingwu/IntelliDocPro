@@ -76,6 +76,40 @@ for e in entries:
 Azure 的 deployment 名按最长子串匹配到底层模型（如 `prod-gpt-5.6-terra-eu`）。
 单个候选失败不会中断整个对比（`ok=False` + `error`）。
 
+## 批量处理（bulk）
+
+```python
+import docstill
+
+report = docstill.bulk_extract(
+    ["a.pdf", "b.pdf", ("scan.pdf", pdf_bytes)],   # 路径 / bytes / (文件名, bytes)
+    schema,
+    engine="openai", model="gpt-5.6-luna",
+    max_workers=4,
+    on_update=lambda snap: print(snap.completed, "/", snap.total),  # 每次状态变化回调
+)
+print(report.completed, report.failed, report.needs_review_files, report.total_cost_usd)
+```
+
+单个文件失败（坏文件、API 错误）只标记该条目，不中断整批。
+`on_update` 收到的是不可变快照，可直接透传给 UI。
+
+HTTP 版是异步 job + 轮询：
+
+```bash
+# 提交, 立即返回 job_id
+curl -X POST http://localhost:8000/bulk \
+  -F "files=@a.pdf" -F "files=@b.pdf" \
+  -F 'schema={"fields":[{"name":"Lieferant"}]}' \
+  -F "engine=openai" -F "model=gpt-5.6-luna"
+# => 202 {"job_id": "7f6f71155c74", "total": 2}
+
+# 前端每秒轮询进度: 每个文件 queued/running/done/failed + 累计成本
+curl http://localhost:8000/bulk/7f6f71155c74
+```
+
+Job 状态存进程内存，多进程部署时换 Redis（接口不变）。
+
 ## HTTP 服务
 
 ```bash

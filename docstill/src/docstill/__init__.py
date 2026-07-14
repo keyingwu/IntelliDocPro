@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+from .bulk import BulkFileEntry, BulkReport, bulk_extract
 from .compare import Candidate, CompareEntry, compare_engines
 from .document import Document, coerce_document
 from .engines import available_engines, get_engine
@@ -19,6 +20,9 @@ from .result import ExtractionResult, FieldValue, SourceRef
 from .schema import ExtractionSchema, FieldSpec, FieldType
 
 __all__ = [
+    "BulkFileEntry",
+    "BulkReport",
+    "bulk_extract",
     "Candidate",
     "CompareEntry",
     "CostBreakdown",

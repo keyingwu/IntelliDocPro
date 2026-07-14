@@ -155,6 +155,72 @@ def test_compare_bad_candidates_json(client):
     assert resp.status_code == 422
 
 
+def _wait_for_done(client, job_id, timeout=3.0):
+    import time
+
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        body = client.get(f"/bulk/{job_id}").json()
+        if body["status"] == "done":
+            return body
+        time.sleep(0.02)
+    raise AssertionError("bulk job did not finish in time")
+
+
+def test_bulk_job_lifecycle(client, monkeypatch):
+    from docstill.bulk import BulkFileEntry, BulkReport
+
+    def fake_bulk_extract(documents, schema, engine="claude", model=None, on_update=None):
+        names = [name for name, _ in documents]
+        entries = [
+            BulkFileEntry(filename=n, status="done", needs_review=False, duration_s=0.1)
+            for n in names
+        ]
+        report = BulkReport(
+            status="done", engine=engine, model="m", total=len(names),
+            completed=len(names), total_cost_usd=0.01, entries=entries,
+        )
+        on_update(report)
+        return report
+
+    monkeypatch.setattr(app_module.docstill, "bulk_extract", fake_bulk_extract)
+    monkeypatch.setattr(app_module.docstill, "get_engine", lambda *a, **k: object())
+
+    resp = client.post(
+        "/bulk",
+        files=[
+            ("files", ("a.pdf", PDF, "application/pdf")),
+            ("files", ("b.pdf", PDF, "application/pdf")),
+        ],
+        data={"schema": SCHEMA_JSON},
+    )
+    assert resp.status_code == 202
+    body = resp.json()
+    assert body["total"] == 2
+
+    final = _wait_for_done(client, body["job_id"])
+    assert final["completed"] == 2
+    assert [e["filename"] for e in final["entries"]] == ["a.pdf", "b.pdf"]
+    assert final["total_cost_usd"] == 0.01
+
+
+def test_bulk_unknown_job_404(client):
+    assert client.get("/bulk/nope").status_code == 404
+
+
+def test_bulk_engine_not_configured_rejected_upfront(client, monkeypatch):
+    def boom(*a, **kw):
+        raise EngineNotConfigured("no key")
+
+    monkeypatch.setattr(app_module.docstill, "get_engine", boom)
+    resp = client.post(
+        "/bulk",
+        files=[("files", ("a.pdf", PDF, "application/pdf"))],
+        data={"schema": SCHEMA_JSON},
+    )
+    assert resp.status_code == 503
+
+
 def test_suggest_ok(client, monkeypatch):
     fake_schema = ExtractionSchema(fields=[FieldSpec(name="Lieferant")])
     monkeypatch.setattr(app_module.docstill, "suggest_schema", lambda doc, engine="claude": fake_schema)
