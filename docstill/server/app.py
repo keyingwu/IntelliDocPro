@@ -55,11 +55,42 @@ def health():
     return {"status": "ok", "engines": docstill.available_engines()}
 
 
+# Curated per-engine model choices offered in the UI. Azure has none:
+# its "model" is whatever deployment name the user created.
+_ENGINE_MODELS = {
+    "claude": ["claude-opus-4-8", "claude-sonnet-5", "claude-haiku-4-5"],
+    "openai": ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"],
+    "azure_openai": [],
+}
+
+
+@app.get("/models")
+def models():
+    from docstill.engines import ENGINES
+    from docstill.pricing import PRICES_AS_OF, lookup_price
+
+    out = {}
+    for engine_name, cls in ENGINES.items():
+        entries = []
+        for model_id in _ENGINE_MODELS.get(engine_name, []):
+            price = lookup_price(model_id)
+            entries.append(
+                {
+                    "id": model_id,
+                    "input_per_mtok": price.input_per_mtok if price else None,
+                    "output_per_mtok": price.output_per_mtok if price else None,
+                }
+            )
+        out[engine_name] = {"default": cls.default_model(), "models": entries}
+    return {"prices_as_of": PRICES_AS_OF, "engines": out}
+
+
 @app.post("/extract")
 async def extract(
     file: UploadFile = File(...),
     extraction_schema: str = Form(..., alias="schema"),
     engine: str = Form("claude"),
+    model: str | None = Form(None),
 ):
     try:
         schema_dict = json.loads(extraction_schema)
@@ -67,7 +98,7 @@ async def extract(
         raise SchemaValidationError(f"schema is not valid JSON: {exc}") from exc
     data = await file.read()
     doc = docstill.Document.from_bytes(data, filename=file.filename or "document")
-    result = docstill.extract(doc, schema_dict, engine=engine)
+    result = docstill.extract(doc, schema_dict, engine=engine, model=model)
     return result.model_dump()
 
 
@@ -148,10 +179,11 @@ def bulk_status(job_id: str):
 async def suggest(
     file: UploadFile = File(...),
     engine: str = Form("claude"),
+    model: str | None = Form(None),
 ):
     data = await file.read()
     doc = docstill.Document.from_bytes(data, filename=file.filename or "document")
-    schema = docstill.suggest_schema(doc, engine=engine)
+    schema = docstill.suggest_schema(doc, engine=engine, model=model)
     return schema.model_dump()
 
 

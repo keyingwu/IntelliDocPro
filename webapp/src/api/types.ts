@@ -103,3 +103,14 @@ export interface Health {
   status: string
   engines: Record<string, boolean>
 }
+
+export interface ModelOption {
+  id: string
+  input_per_mtok: number | null
+  output_per_mtok: number | null
+}
+
+export interface ModelsResponse {
+  prices_as_of: string
+  engines: Record<string, { default: string; models: ModelOption[] }>
+}

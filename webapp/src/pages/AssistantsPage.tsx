@@ -58,7 +58,10 @@ function AssistantCard({ assistant, index }: { assistant: Assistant; index: numb
         </button>
       </div>
       <div className="assistant-name">{assistant.name}</div>
-      <div className="assistant-desc">{assistant.description || `${assistant.engine} · ${assistant.schema.fields.length} fields`}</div>
+      <div className="assistant-desc">
+        {assistant.description ||
+          `${assistant.engine}${assistant.model ? ` · ${assistant.model}` : ''} · ${assistant.schema.fields.length} fields`}
+      </div>
       <div className="assistant-stats">
         <span>
           <b>{assistant.doc_count}</b> {t('assistants.docs')}

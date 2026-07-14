@@ -17,6 +17,13 @@ class Extractor(ABC):
     def is_configured(cls) -> bool:
         """True if the required environment variables are present."""
 
+    @classmethod
+    @abstractmethod
+    def default_model(cls) -> str:
+        """The model used when none is passed (env override included).
+        Empty string if there is no meaningful default (e.g. Azure without
+        a configured deployment)."""
+
     @abstractmethod
     def extract(self, doc: Document, schema: ExtractionSchema) -> ExtractionResult: ...
 

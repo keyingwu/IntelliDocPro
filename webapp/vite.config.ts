@@ -1,7 +1,7 @@
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
-const API_PATHS = ['/assistants', '/bulk', '/extract', '/schema', '/compare', '/health']
+const API_PATHS = ['/assistants', '/bulk', '/extract', '/schema', '/compare', '/health', '/models']
 
 // https://vite.dev/config/
 export default defineConfig({

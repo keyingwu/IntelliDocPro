@@ -24,7 +24,9 @@ export const en = {
   'wizard.step.bulk': 'Upload',
   'wizard.name.placeholder': 'Assistant name, e.g. Invoices',
   'wizard.engine': 'Engine',
-  'wizard.model.placeholder': 'Model (optional, engine default)',
+  'wizard.model': 'Model',
+  'wizard.model.default': 'Engine default ({model})',
+  'wizard.model.deployment': 'Deployment name',
 
   'sample.drop.title': 'Drop a sample document',
   'sample.drop.body': 'PDF, PNG or JPG. We analyze it and propose the fields to extract.',

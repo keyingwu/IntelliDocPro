@@ -22,3 +22,7 @@ class OpenAIExtractor(ResponsesAPIExtractor):
     @classmethod
     def is_configured(cls) -> bool:
         return bool(os.environ.get("OPENAI_API_KEY"))
+
+    @classmethod
+    def default_model(cls) -> str:
+        return os.environ.get("DOCSTILL_OPENAI_MODEL", DEFAULT_MODEL)

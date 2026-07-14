@@ -52,6 +52,10 @@ class ClaudeExtractor(Extractor):
     def is_configured(cls) -> bool:
         return bool(os.environ.get("ANTHROPIC_API_KEY"))
 
+    @classmethod
+    def default_model(cls) -> str:
+        return os.environ.get("DOCSTILL_CLAUDE_MODEL", DEFAULT_MODEL)
+
     def _document_block(self, doc: Document) -> dict:
         source = {"type": "base64", "media_type": doc.media_type, "data": doc.base64()}
         if doc.is_pdf:

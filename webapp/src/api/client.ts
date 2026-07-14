@@ -4,6 +4,7 @@ import type {
   ExtractionResult,
   ExtractionSchema,
   Health,
+  ModelsResponse,
   ResultRow,
 } from './types'
 
@@ -37,6 +38,7 @@ function json(body: unknown, method = 'POST'): RequestInit {
 
 export const api = {
   health: () => request<Health>('/health'),
+  models: () => request<ModelsResponse>('/models'),
 
   listAssistants: () => request<Assistant[]>('/assistants'),
   getAssistant: (id: string) => request<Assistant>(`/assistants/${id}`),
@@ -51,18 +53,20 @@ export const api = {
     request<Assistant>(`/assistants/${id}`, json(body, 'PUT')),
   deleteAssistant: (id: string) => request<void>(`/assistants/${id}`, { method: 'DELETE' }),
 
-  suggestSchema: (file: File, engine: string) => {
+  suggestSchema: (file: File, engine: string, model?: string | null) => {
     const form = new FormData()
     form.append('file', file)
     form.append('engine', engine)
+    if (model) form.append('model', model)
     return request<ExtractionSchema>('/schema/suggest', { method: 'POST', body: form })
   },
 
-  extract: (file: File, schema: ExtractionSchema, engine: string) => {
+  extract: (file: File, schema: ExtractionSchema, engine: string, model?: string | null) => {
     const form = new FormData()
     form.append('file', file)
     form.append('schema', JSON.stringify(schema))
     form.append('engine', engine)
+    if (model) form.append('model', model)
     return request<ExtractionResult>('/extract', { method: 'POST', body: form })
   },
 

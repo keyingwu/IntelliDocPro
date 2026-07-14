@@ -33,25 +33,66 @@ const CONF_COLOR: Record<string, string> = {
   low: 'var(--bad)',
 }
 
-function EngineSelect({
-  value,
-  onChange,
+function EngineModelPicker({
+  engine,
+  model,
+  onEngine,
+  onModel,
 }: {
-  value: string
-  onChange: (engine: string) => void
+  engine: string
+  model: string
+  onEngine: (engine: string) => void
+  onModel: (model: string) => void
 }) {
-  const { data } = useQuery({ queryKey: ['health'], queryFn: api.health })
-  const engines = data ? Object.entries(data.engines) : []
+  const health = useQuery({ queryKey: ['health'], queryFn: api.health })
+  const catalog = useQuery({ queryKey: ['models'], queryFn: api.models })
+  const engines = health.data ? Object.entries(health.data.engines) : []
+  const info = catalog.data?.engines[engine]
+  const deploymentStyle = (info?.models.length ?? 0) === 0 // Azure: free-text deployment
+
   return (
-    <select className="input select" value={value} onChange={(e) => onChange(e.target.value)}>
-      {engines.length === 0 && <option value={value}>{value}</option>}
-      {engines.map(([name, configured]) => (
-        <option key={name} value={name} disabled={!configured}>
-          {name}
-          {configured ? '' : ' (not configured)'}
-        </option>
-      ))}
-    </select>
+    <div className="engine-row">
+      <label>{t('wizard.engine')}</label>
+      <select
+        className="input select"
+        value={engine}
+        onChange={(e) => {
+          onEngine(e.target.value)
+          onModel('')
+        }}
+      >
+        {engines.length === 0 && <option value={engine}>{engine}</option>}
+        {engines.map(([name, configured]) => (
+          <option key={name} value={name} disabled={!configured}>
+            {name}
+            {configured ? '' : ' (not configured)'}
+          </option>
+        ))}
+      </select>
+      <label>{t('wizard.model')}</label>
+      {deploymentStyle ? (
+        <input
+          className="input model-input"
+          value={model}
+          placeholder={info?.default || t('wizard.model.deployment')}
+          onChange={(e) => onModel(e.target.value)}
+        />
+      ) : (
+        <select
+          className="input select model-input"
+          value={model}
+          onChange={(e) => onModel(e.target.value)}
+        >
+          <option value="">{t('wizard.model.default', { model: info?.default ?? '…' })}</option>
+          {info?.models.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.id}
+              {m.input_per_mtok != null ? `  —  $${m.input_per_mtok} / $${m.output_per_mtok} per 1M tok` : ''}
+            </option>
+          ))}
+        </select>
+      )}
+    </div>
   )
 }
 
@@ -260,6 +301,7 @@ export default function BuildWizard() {
   const [assistantId, setAssistantId] = useState<string | null>(routeId ?? null)
   const [name, setName] = useState('')
   const [engine, setEngine] = useState('claude')
+  const [model, setModel] = useState('')
   const [fields, setFields] = useState<FieldSpec[]>([])
   const [sampleFile, setSampleFile] = useState<File | null>(null)
   const [testResult, setTestResult] = useState<ExtractionResult | null>(null)
@@ -276,16 +318,18 @@ export default function BuildWizard() {
     if (existing.data) {
       setName(existing.data.name)
       setEngine(existing.data.engine)
+      setModel(existing.data.model ?? '')
       setFields(existing.data.schema.fields)
     }
   }, [existing.data])
 
   const suggest = useMutation({
     mutationFn: async (file: File) => {
-      const schema = await api.suggestSchema(file, engine)
+      const schema = await api.suggestSchema(file, engine, model || null)
       const assistant = await api.createAssistant({
         name: name.trim() || file.name.replace(/\.[^.]+$/, ''),
         engine,
+        model: model || null,
         schema,
       })
       return assistant
@@ -303,6 +347,7 @@ export default function BuildWizard() {
       api.createAssistant({
         name: name.trim() || t('wizard.title.new'),
         engine,
+        model: model || null,
         schema: { fields: [{ name: 'Field 1', type: 'text' }] },
       }),
     onSuccess: (assistant) => {
@@ -315,12 +360,17 @@ export default function BuildWizard() {
 
   const saveAndContinue = useMutation({
     mutationFn: () =>
-      api.updateAssistant(assistantId!, { name, engine, schema: { fields } }),
+      api.updateAssistant(assistantId!, {
+        name,
+        engine,
+        model: model || null,
+        schema: { fields },
+      }),
     onSuccess: () => setStep(3),
   })
 
   const test = useMutation({
-    mutationFn: () => api.extract(sampleFile!, { fields }, engine),
+    mutationFn: () => api.extract(sampleFile!, { fields }, engine, model || null),
     onSuccess: (result) => setTestResult(result),
   })
 
@@ -394,10 +444,7 @@ export default function BuildWizard() {
 
       {step === 1 && (
         <div className="sample-stage rise">
-          <div className="engine-row">
-            <label>{t('wizard.engine')}</label>
-            <EngineSelect value={engine} onChange={setEngine} />
-          </div>
+          <EngineModelPicker engine={engine} model={model} onEngine={setEngine} onModel={setModel} />
           {suggest.isPending ? (
             <div className="analyzing card">
               <Loader2 size={22} className="spin" style={{ color: 'var(--teal)' }} />
@@ -429,6 +476,7 @@ export default function BuildWizard() {
               <h3>{t('fields.title')}</h3>
               <span className="muted">{fields.length}</span>
             </div>
+            <EngineModelPicker engine={engine} model={model} onEngine={setEngine} onModel={setModel} />
             <div className="fields-list">
               {fields.map((field, i) => (
                 <FieldRow

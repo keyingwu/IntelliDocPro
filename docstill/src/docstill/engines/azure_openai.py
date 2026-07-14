@@ -37,3 +37,7 @@ class AzureOpenAIExtractor(ResponsesAPIExtractor):
     @classmethod
     def is_configured(cls) -> bool:
         return all(os.environ.get(v) for v in _REQUIRED_VARS)
+
+    @classmethod
+    def default_model(cls) -> str:
+        return os.environ.get("AZURE_OPENAI_DEPLOYMENT", "")

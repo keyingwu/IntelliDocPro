@@ -36,8 +36,9 @@ def test_health(client, monkeypatch):
 def test_extract_ok(client, monkeypatch):
     captured = {}
 
-    def fake_extract(doc, schema, engine="claude", **kw):
+    def fake_extract(doc, schema, engine="claude", model=None, **kw):
         captured["engine"] = engine
+        captured["model"] = model
         captured["fields"] = [f.name for f in ExtractionSchema.coerce(schema).fields]
         return FAKE_RESULT
 
@@ -45,12 +46,26 @@ def test_extract_ok(client, monkeypatch):
     resp = client.post(
         "/extract",
         files={"file": ("a.pdf", PDF, "application/pdf")},
-        data={"schema": SCHEMA_JSON, "engine": "openai"},
+        data={"schema": SCHEMA_JSON, "engine": "openai", "model": "gpt-5.6-luna"},
     )
     assert resp.status_code == 200
     body = resp.json()
     assert body["values"][0]["value"] == "X"
-    assert captured == {"engine": "openai", "fields": ["Lieferant"]}
+    assert captured == {"engine": "openai", "model": "gpt-5.6-luna", "fields": ["Lieferant"]}
+
+
+def test_models_endpoint(client):
+    resp = client.get("/models")
+    assert resp.status_code == 200
+    body = resp.json()
+    engines = body["engines"]
+    assert set(engines) == {"claude", "openai", "azure_openai"}
+    claude_ids = [m["id"] for m in engines["claude"]["models"]]
+    assert "claude-opus-4-8" in claude_ids
+    terra = next(m for m in engines["openai"]["models"] if m["id"] == "gpt-5.6-terra")
+    assert terra["input_per_mtok"] == 2.5
+    assert engines["openai"]["default"] == "gpt-5.6-terra"
+    assert engines["azure_openai"]["models"] == []
 
 
 def test_extract_invalid_json_schema(client):
@@ -223,7 +238,9 @@ def test_bulk_engine_not_configured_rejected_upfront(client, monkeypatch):
 
 def test_suggest_ok(client, monkeypatch):
     fake_schema = ExtractionSchema(fields=[FieldSpec(name="Lieferant")])
-    monkeypatch.setattr(app_module.docstill, "suggest_schema", lambda doc, engine="claude": fake_schema)
+    monkeypatch.setattr(
+        app_module.docstill, "suggest_schema", lambda doc, engine="claude", model=None: fake_schema
+    )
     resp = client.post("/schema/suggest", files={"file": ("a.pdf", PDF, "application/pdf")})
     assert resp.status_code == 200
     assert resp.json()["fields"][0]["name"] == "Lieferant"
