@@ -1,0 +1,51 @@
+.dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 46px 30px;
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--card);
+  text-align: center;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+.dropzone.compact {
+  padding: 26px 20px;
+}
+
+.dropzone.dragging {
+  border-color: var(--teal);
+  background: var(--teal-wash);
+  transform: scale(1.005);
+}
+
+.dropzone-icon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--teal-wash);
+  color: var(--teal-deep);
+  margin-bottom: 6px;
+}
+
+.dropzone.compact .dropzone-icon {
+  width: 42px;
+  height: 42px;
+}
+
+.dropzone-title {
+  font-family: var(--font-display);
+  font-weight: 650;
+  font-size: 15.5px;
+}
+
+.dropzone-body {
+  color: var(--ink-3);
+  font-size: 13px;
+  max-width: 340px;
+  margin-bottom: 10px;
+}

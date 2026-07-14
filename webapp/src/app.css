@@ -1,0 +1,116 @@
+/* app shell */
+
+.shell {
+  display: flex;
+  min-height: 100%;
+}
+
+.sidebar {
+  width: 232px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 22px 14px;
+  background: var(--card);
+  border-right: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 0 8px;
+}
+
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--teal) 0%, var(--teal-deep) 100%);
+  color: #fff;
+  box-shadow: 0 3px 10px rgba(46, 140, 158, 0.35);
+}
+
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.brand-name {
+  font-family: var(--font-display);
+  font-weight: 680;
+  font-size: 15.5px;
+  letter-spacing: -0.01em;
+}
+
+.brand-tagline {
+  font-size: 11.5px;
+  color: var(--ink-faint);
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink-3);
+}
+
+.nav-item:hover {
+  background: var(--card-2);
+}
+
+.nav-item.active {
+  background: var(--teal-wash);
+  color: var(--teal-deep);
+  font-weight: 600;
+}
+
+.sidebar-foot {
+  margin-top: auto;
+  padding: 0 8px;
+  font-size: 11.5px;
+  color: var(--ink-ghost);
+}
+
+.main {
+  flex: 1;
+  min-width: 0;
+  padding: 34px 40px 60px;
+  max-width: 1240px;
+}
+
+/* page header pattern */
+.page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 26px;
+}
+
+.page-head h1 {
+  font-size: 24px;
+}
+
+.page-head .sub {
+  margin-top: 4px;
+  color: var(--ink-3);
+  font-size: 13.5px;
+}

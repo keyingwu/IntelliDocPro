@@ -1,0 +1,90 @@
+export const en = {
+  // app shell
+  'app.name': 'IntelliDoc Pro',
+  'app.tagline': 'Document assistants',
+  'nav.assistants': 'Assistants',
+  'nav.overview': 'Overview',
+
+  // assistants page
+  'assistants.title': 'Assistants',
+  'assistants.subtitle': 'Each assistant extracts one kind of document with its own field schema.',
+  'assistants.new': 'New assistant',
+  'assistants.empty.title': 'No assistants yet',
+  'assistants.empty.body': 'Create your first assistant from a sample document. It takes about a minute.',
+  'assistants.docs': 'documents',
+  'assistants.review': 'to review',
+  'assistants.spent': 'spent',
+  'assistants.delete.confirm': 'Delete this assistant and all its results?',
+
+  // wizard
+  'wizard.title.new': 'New assistant',
+  'wizard.title.edit': 'Edit assistant',
+  'wizard.step.sample': 'Sample',
+  'wizard.step.fields': 'Fields',
+  'wizard.step.bulk': 'Upload',
+  'wizard.name.placeholder': 'Assistant name, e.g. Invoices',
+  'wizard.engine': 'Engine',
+  'wizard.model.placeholder': 'Model (optional, engine default)',
+
+  'sample.drop.title': 'Drop a sample document',
+  'sample.drop.body': 'PDF, PNG or JPG. We analyze it and propose the fields to extract.',
+  'sample.drop.button': 'Choose file',
+  'sample.analyzing': 'Reading the sample and proposing fields…',
+  'sample.skip': 'Skip — define fields manually',
+
+  'fields.title': 'Fields to extract',
+  'fields.add': 'Add field',
+  'fields.name.placeholder': 'Field name',
+  'fields.description.placeholder': 'Extraction hint (optional)',
+  'fields.enum.placeholder': 'Allowed values, comma-separated',
+  'fields.test': 'Test on sample',
+  'fields.testing': 'Extracting from sample…',
+  'fields.continue': 'Continue to upload',
+  'fields.preview.empty': 'No sample uploaded. You can still define fields and continue.',
+  'fields.preview.hint': 'Hover a field to locate it in the sample.',
+  'fields.source.fallback': 'Found on page {page}: {location}',
+  'fields.required': 'required',
+
+  // bulk step
+  'bulk.drop.title': 'Drop documents to process',
+  'bulk.drop.body': 'Up to dozens of PDFs or images. They run in parallel.',
+  'bulk.drop.button': 'Choose files',
+  'bulk.start': 'Process {count} documents',
+  'bulk.running': 'Processing documents…',
+  'bulk.done': 'Processing complete',
+  'bulk.status.queued': 'Queued',
+  'bulk.status.running': 'Reading',
+  'bulk.status.done': 'Done',
+  'bulk.status.failed': 'Failed',
+  'bulk.toResults': 'View results',
+  'bulk.cost': 'Cost so far',
+
+  // results
+  'results.filter.all': 'All',
+  'results.filter.review': 'Needs review',
+  'results.filter.ready': 'Ready',
+  'results.export': 'Export Excel',
+  'results.addDocs': 'Add documents',
+  'results.editFields': 'Edit fields',
+  'results.empty': 'No documents processed yet.',
+  'results.status.ready': 'Ready',
+  'results.status.review': 'Review',
+  'results.status.failed': 'Failed',
+  'results.drawer.raw': 'Raw text',
+  'results.drawer.source': 'Source',
+  'results.drawer.confidence': 'Confidence',
+  'results.drawer.page': 'Page {page}',
+  'results.docs': '{count} documents',
+  'results.cost': '{cost} total',
+
+  // shared
+  'common.cancel': 'Cancel',
+  'common.save': 'Save',
+  'common.delete': 'Delete',
+  'common.back': 'Back',
+  'common.loading': 'Loading…',
+  'common.error': 'Something went wrong',
+  'common.retry': 'Retry',
+} as const
+
+export type MessageKey = keyof typeof en

@@ -1,0 +1,64 @@
+/* IntelliDocPro design tokens, carried over from the Dokumenten-Assistent
+   prototype: warm cream surfaces, teal primary, amber review accent. */
+
+:root {
+  /* brand */
+  --teal: #2e8c9e;
+  --teal-deep: #1f6f7e;
+  --teal-ink: #185863;
+  --teal-wash: #e7f2f4;
+  --teal-wash-2: #cde9ed;
+  --amber: #f4a63b;
+  --amber-deep: #9a6716;
+  --amber-wash: #faf0dc;
+  --amber-wash-2: #fcf6e7;
+
+  /* surfaces */
+  --page: #f4f1ea;
+  --card: #fcfbf9;
+  --card-2: #f7f5f1;
+  --border: #e4e0da;
+  --border-strong: #c9c3b8;
+
+  /* ink */
+  --ink: #2c2a28;
+  --ink-2: #4a463f;
+  --ink-3: #6b665f;
+  --ink-faint: #a8a29a;
+  --ink-ghost: #c0bab0;
+
+  /* semantic */
+  --ok: #2f7355;
+  --ok-wash: #e8f3ec;
+  --ok-dot: #4f9d7a;
+  --bad: #9a3f34;
+  --bad-wash: #fae8e4;
+  --purple: #7a5aa8;
+  --purple-wash: #efeaf6;
+
+  /* type */
+  --font-display: 'Bricolage Grotesque Variable', 'Instrument Sans Variable', sans-serif;
+  --font-body: 'Instrument Sans Variable', -apple-system, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* shape */
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 18px;
+  --shadow-card: 0 1px 2px rgba(44, 42, 40, 0.04), 0 4px 16px rgba(44, 42, 40, 0.06);
+  --shadow-pop: 0 8px 28px rgba(44, 42, 40, 0.18);
+
+  /* field type chips */
+  --type-text: #6e685f;
+  --type-text-bg: #f0eeea;
+  --type-number: #1f6f7e;
+  --type-number-bg: #e7f2f4;
+  --type-date: #7a5aa8;
+  --type-date-bg: #efeaf6;
+  --type-amount: #2f7355;
+  --type-amount-bg: #e8f3ec;
+  --type-percent: #9a6716;
+  --type-percent-bg: #faf0dc;
+  --type-enum: #9a3f34;
+  --type-enum-bg: #fae8e4;
+}

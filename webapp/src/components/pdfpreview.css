@@ -1,0 +1,51 @@
+.pdf-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  overflow: auto;
+  height: 100%;
+  padding: 18px;
+  background: var(--card-2);
+  border-radius: var(--radius);
+}
+
+.pdf-page {
+  position: relative;
+  box-shadow: 0 2px 12px rgba(44, 42, 40, 0.14);
+  border-radius: 4px;
+  overflow: hidden;
+  background: #fff;
+  flex-shrink: 0;
+}
+
+.image-preview {
+  max-width: 100%;
+  border-radius: 4px;
+  box-shadow: 0 2px 12px rgba(44, 42, 40, 0.14);
+}
+
+/* pdf.js text layer (subset of pdf_viewer.css we actually need) */
+.textLayer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  line-height: 1;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+}
+
+.textLayer span {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0 0;
+}
+
+.textLayer span.hl {
+  background: rgba(244, 166, 59, 0.45);
+  color: transparent;
+  border-radius: 2px;
+  box-shadow: 0 0 0 2px rgba(244, 166, 59, 0.55);
+}

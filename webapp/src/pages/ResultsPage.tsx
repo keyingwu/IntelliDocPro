@@ -1,0 +1,190 @@
+import { useQuery } from '@tanstack/react-query'
+import { ArrowLeft, Download, FilePlus2, Settings2, X } from 'lucide-react'
+import { useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+import { api } from '../api/client'
+import type { FieldValue, ResultRow } from '../api/types'
+import { t } from '../i18n'
+import './results.css'
+
+type Filter = 'all' | 'review' | 'ready'
+
+const CONF_COLOR: Record<string, string> = {
+  high: 'var(--ok-dot)',
+  medium: 'var(--amber)',
+  low: 'var(--bad)',
+}
+
+function StatusPill({ row }: { row: ResultRow }) {
+  if (row.status === 'failed')
+    return <span className="pill pill-failed">{t('results.status.failed')}</span>
+  if (row.needs_review)
+    return <span className="pill pill-review">{t('results.status.review')}</span>
+  return <span className="pill pill-ready">{t('results.status.ready')}</span>
+}
+
+function Drawer({ row, onClose }: { row: ResultRow; onClose: () => void }) {
+  return (
+    <aside className="drawer card">
+      <div className="drawer-head">
+        <div>
+          <div className="drawer-title">{row.filename}</div>
+          <StatusPill row={row} />
+        </div>
+        <button className="btn-icon visible" onClick={onClose}>
+          <X size={17} />
+        </button>
+      </div>
+      {row.error && <div className="error-note">{row.error}</div>}
+      <div className="drawer-fields">
+        {row.values.map((v: FieldValue) => (
+          <div key={v.field} className={`drawer-field${v.needs_review ? ' flagged' : ''}`}>
+            <div className="drawer-field-name">{v.field}</div>
+            <div className="drawer-field-value">
+              {v.value ?? '—'}
+              {v.currency ? ` ${v.currency}` : ''}
+            </div>
+            <dl className="drawer-meta">
+              {v.raw_text && (
+                <>
+                  <dt>{t('results.drawer.raw')}</dt>
+                  <dd>“{v.raw_text}”</dd>
+                </>
+              )}
+              {v.source && (v.source.page || v.source.location) && (
+                <>
+                  <dt>{t('results.drawer.source')}</dt>
+                  <dd>
+                    {v.source.page ? t('results.drawer.page', { page: v.source.page }) : ''}
+                    {v.source.page && v.source.location ? ' · ' : ''}
+                    {v.source.location ?? ''}
+                  </dd>
+                </>
+              )}
+              <dt>{t('results.drawer.confidence')}</dt>
+              <dd>
+                <span className="conf-dot" style={{ background: CONF_COLOR[v.confidence] }} />{' '}
+                {v.confidence}
+              </dd>
+            </dl>
+          </div>
+        ))}
+      </div>
+    </aside>
+  )
+}
+
+export default function ResultsPage() {
+  const { assistantId } = useParams()
+  const navigate = useNavigate()
+  const [filter, setFilter] = useState<Filter>('all')
+  const [selected, setSelected] = useState<ResultRow | null>(null)
+
+  const assistant = useQuery({
+    queryKey: ['assistant', assistantId],
+    queryFn: () => api.getAssistant(assistantId!),
+  })
+  const results = useQuery({
+    queryKey: ['results', assistantId, filter],
+    queryFn: () => api.listResults(assistantId!, filter),
+  })
+
+  if (!assistant.data) return <div className="muted">{t('common.loading')}</div>
+  const a = assistant.data
+  const fieldNames = a.schema.fields.map((f) => f.name)
+  const rows = results.data ?? []
+
+  const filters: { key: Filter; label: string; count?: number }[] = [
+    { key: 'all', label: t('results.filter.all'), count: a.doc_count + a.failed_count },
+    { key: 'review', label: t('results.filter.review'), count: a.review_count },
+    { key: 'ready', label: t('results.filter.ready') },
+  ]
+
+  return (
+    <>
+      <div className="page-head">
+        <div>
+          <button className="back-link" onClick={() => navigate('/')}>
+            <ArrowLeft size={14} />
+            {t('nav.assistants')}
+          </button>
+          <h1>{a.name}</h1>
+          <div className="sub">
+            {a.engine}
+            {a.model ? ` · ${a.model}` : ''} · {t('results.docs', { count: a.doc_count })} ·{' '}
+            {t('results.cost', { cost: `$${a.total_cost_usd.toFixed(4)}` })}
+          </div>
+        </div>
+        <div className="head-actions">
+          <button className="btn btn-ghost" onClick={() => navigate(`/build/${a.id}?step=2`)}>
+            <Settings2 size={15} />
+            {t('results.editFields')}
+          </button>
+          <button className="btn btn-ghost" onClick={() => navigate(`/build/${a.id}?step=3`)}>
+            <FilePlus2 size={15} />
+            {t('results.addDocs')}
+          </button>
+          <a className="btn btn-primary" href={api.exportUrl(a.id)}>
+            <Download size={15} />
+            {t('results.export')}
+          </a>
+        </div>
+      </div>
+
+      <div className="filter-row">
+        {filters.map((f) => (
+          <button
+            key={f.key}
+            className={`filter-chip${filter === f.key ? ' active' : ''}`}
+            onClick={() => setFilter(f.key)}
+          >
+            {f.label}
+            {f.count !== undefined && <span className="filter-count">{f.count}</span>}
+          </button>
+        ))}
+      </div>
+
+      {rows.length === 0 && <div className="muted empty-note">{t('results.empty')}</div>}
+
+      {rows.length > 0 && (
+        <div className="table-wrap card rise">
+          <table className="results-table">
+            <thead>
+              <tr>
+                <th className="col-doc">Document</th>
+                {fieldNames.map((name) => (
+                  <th key={name}>{name}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => {
+                const byField = new Map(row.values.map((v) => [v.field, v]))
+                return (
+                  <tr key={row.id} onClick={() => setSelected(row)}>
+                    <td className="col-doc">
+                      <span className="doc-name">{row.filename}</span>
+                      <StatusPill row={row} />
+                    </td>
+                    {fieldNames.map((name) => {
+                      const v = byField.get(name)
+                      const flagged = v?.needs_review
+                      return (
+                        <td key={name} className={flagged ? 'flagged' : ''}>
+                          {v?.value ?? '—'}
+                          {v?.currency ? ` ${v.currency}` : ''}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {selected && <Drawer row={selected} onClose={() => setSelected(null)} />}
+    </>
+  )
+}

@@ -153,3 +153,23 @@ async def suggest(
     doc = docstill.Document.from_bytes(data, filename=file.filename or "document")
     schema = docstill.suggest_schema(doc, engine=engine)
     return schema.model_dump()
+
+
+# ---- production static hosting of the webapp (single-process deploy) ----
+# Must stay at the bottom of this module: the catch-all only wins for paths
+# no API route above has claimed.
+_WEBAPP_DIST = Path(__file__).parent.parent.parent / "webapp" / "dist"
+
+if _WEBAPP_DIST.is_dir():  # only when the frontend has been built
+    from fastapi.responses import FileResponse
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def spa(full_path: str):
+        candidate = (_WEBAPP_DIST / full_path).resolve()
+        if (
+            full_path
+            and candidate.is_file()
+            and candidate.is_relative_to(_WEBAPP_DIST.resolve())
+        ):
+            return FileResponse(candidate)
+        return FileResponse(_WEBAPP_DIST / "index.html")
