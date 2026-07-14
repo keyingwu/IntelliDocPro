@@ -2,8 +2,10 @@
 
 from pathlib import Path
 
+from .compare import Candidate, CompareEntry, compare_engines
 from .document import Document, coerce_document
 from .engines import available_engines, get_engine
+from .pricing import PRICES, PRICES_AS_OF, CostBreakdown, ModelPrice, cost_of
 from .errors import (
     DocstillError,
     DocumentTooLarge,
@@ -17,7 +19,15 @@ from .result import ExtractionResult, FieldValue, SourceRef
 from .schema import ExtractionSchema, FieldSpec, FieldType
 
 __all__ = [
+    "Candidate",
+    "CompareEntry",
+    "CostBreakdown",
     "Document",
+    "ModelPrice",
+    "PRICES",
+    "PRICES_AS_OF",
+    "compare_engines",
+    "cost_of",
     "DocstillError",
     "DocumentTooLarge",
     "EngineError",

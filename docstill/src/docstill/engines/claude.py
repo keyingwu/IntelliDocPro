@@ -19,6 +19,22 @@ from .base import Extractor, suggested_to_schema, usage_dict
 
 DEFAULT_MODEL = "claude-opus-4-8"
 
+# model families that accept thinking={"type": "adaptive"}; older ones
+# (e.g. haiku-4-5, sonnet-4-5) reject it with a 400
+_ADAPTIVE_THINKING_PREFIXES = (
+    "claude-fable-5",
+    "claude-mythos-5",
+    "claude-opus-4-6",
+    "claude-opus-4-7",
+    "claude-opus-4-8",
+    "claude-sonnet-5",
+    "claude-sonnet-4-6",
+)
+
+
+def _supports_adaptive_thinking(model: str) -> bool:
+    return model.startswith(_ADAPTIVE_THINKING_PREFIXES)
+
 
 class ClaudeExtractor(Extractor):
     name = "claude"
@@ -43,11 +59,14 @@ class ClaudeExtractor(Extractor):
         return {"type": "image", "source": source}
 
     def _parse(self, doc: Document, system: str, user_text: str, output_format: type):
+        extra = {}
+        if _supports_adaptive_thinking(self.model):
+            extra["thinking"] = {"type": "adaptive"}
         try:
             response = self.client.messages.parse(
                 model=self.model,
                 max_tokens=16000,
-                thinking={"type": "adaptive"},
+                **extra,
                 system=system,
                 messages=[
                     {

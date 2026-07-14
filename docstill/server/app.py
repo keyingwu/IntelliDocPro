@@ -63,6 +63,30 @@ async def extract(
     return result.model_dump()
 
 
+@app.post("/compare")
+async def compare(
+    file: UploadFile = File(...),
+    extraction_schema: str = Form(..., alias="schema"),
+    candidates: str | None = Form(None),
+):
+    """Run the same extraction across engine/model candidates and report the
+    actual cost per candidate. `candidates` is a JSON list like
+    [{"engine": "claude"}, {"engine": "openai", "model": "gpt-5.6-luna"}];
+    omitted = every configured engine with its default model."""
+    try:
+        schema_dict = json.loads(extraction_schema)
+        candidate_list = json.loads(candidates) if candidates else None
+    except json.JSONDecodeError as exc:
+        raise SchemaValidationError(f"invalid JSON in form field: {exc}") from exc
+    data = await file.read()
+    doc = docstill.Document.from_bytes(data, filename=file.filename or "document")
+    entries = docstill.compare_engines(doc, schema_dict, candidates=candidate_list)
+    return {
+        "prices_as_of": docstill.PRICES_AS_OF,
+        "entries": [e.model_dump() for e in entries],
+    }
+
+
 @app.post("/schema/suggest")
 async def suggest(
     file: UploadFile = File(...),

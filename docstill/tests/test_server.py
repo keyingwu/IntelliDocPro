@@ -118,6 +118,43 @@ def test_engine_error_maps_502(client, monkeypatch):
     assert resp.status_code == 502
 
 
+def test_compare_ok(client, monkeypatch):
+    from docstill.compare import CompareEntry
+    from docstill.pricing import cost_of
+
+    captured = {}
+
+    def fake_compare(doc, schema, candidates=None):
+        captured["candidates"] = candidates
+        return [
+            CompareEntry(
+                engine="claude", model="claude-opus-4-8", ok=True,
+                cost=cost_of(FAKE_RESULT), result=FAKE_RESULT, duration_s=1.0,
+            )
+        ]
+
+    monkeypatch.setattr(app_module.docstill, "compare_engines", fake_compare)
+    resp = client.post(
+        "/compare",
+        files={"file": ("a.pdf", PDF, "application/pdf")},
+        data={"schema": SCHEMA_JSON, "candidates": json.dumps([{"engine": "claude"}])},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "prices_as_of" in body
+    assert body["entries"][0]["engine"] == "claude"
+    assert captured["candidates"] == [{"engine": "claude"}]
+
+
+def test_compare_bad_candidates_json(client):
+    resp = client.post(
+        "/compare",
+        files={"file": ("a.pdf", PDF, "application/pdf")},
+        data={"schema": SCHEMA_JSON, "candidates": "{bad"},
+    )
+    assert resp.status_code == 422
+
+
 def test_suggest_ok(client, monkeypatch):
     fake_schema = ExtractionSchema(fields=[FieldSpec(name="Lieferant")])
     monkeypatch.setattr(app_module.docstill, "suggest_schema", lambda doc, engine="claude": fake_schema)

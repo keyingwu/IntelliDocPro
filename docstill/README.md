@@ -51,6 +51,31 @@ suggested = docstill.suggest_schema("rechnung.pdf", engine="openai")
 
 大小上限: Claude 32MB，OpenAI/Azure 50MB，超限抛 `DocumentTooLarge`。
 
+## 价格测算与引擎对比
+
+```python
+import docstill
+
+# 单次抽取的实际成本（基于返回的真实 token 用量）
+result = docstill.extract("rechnung.pdf", schema, engine="openai")
+cost = docstill.cost_of(result)
+print(cost.total_cost, cost.input_cost, cost.output_cost)  # USD
+
+# 同一文件跑多个 engine/model 候选, 并发执行, 返回每个候选的成本+结果+耗时
+entries = docstill.compare_engines("rechnung.pdf", schema, candidates=[
+    {"engine": "claude"},                              # 引擎默认模型
+    {"engine": "claude", "model": "claude-haiku-4-5"},
+    {"engine": "openai", "model": "gpt-5.6-luna"},
+])
+for e in entries:
+    print(e.engine, e.model, e.ok, e.cost.total_cost if e.ok else e.error)
+```
+
+价格表在 `docstill.PRICES`（USD / 1M tokens，更新日期见 `docstill.PRICES_AS_OF`），
+可传自定义 `prices` 覆盖。未知模型返回 `pricing_known=False` 而不是报错；
+Azure 的 deployment 名按最长子串匹配到底层模型（如 `prod-gpt-5.6-terra-eu`）。
+单个候选失败不会中断整个对比（`ok=False` + `error`）。
+
 ## HTTP 服务
 
 ```bash
@@ -65,6 +90,12 @@ curl -X POST http://localhost:8000/extract \
 
 curl -X POST http://localhost:8000/schema/suggest -F "file=@rechnung.pdf"
 curl http://localhost:8000/health
+
+# 多候选价格对比（candidates 省略 = 所有已配置引擎的默认模型）
+curl -X POST http://localhost:8000/compare \
+  -F "file=@rechnung.pdf" \
+  -F 'schema={"fields":[{"name":"Lieferant"}]}' \
+  -F 'candidates=[{"engine":"claude"},{"engine":"openai","model":"gpt-5.6-luna"}]'
 ```
 
 错误映射: 422（文档类型/schema/engine 名非法）、413（超大小）、
