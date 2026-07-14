@@ -11,11 +11,9 @@ from fastapi.responses import JSONResponse
 import docstill
 from docstill.envfile import load_env_file
 
-load_env_file(Path(__file__).parent.parent / ".env")
+from . import jobs
 
-# in-memory bulk job store; swap for Redis when running multiple processes
-_jobs: dict[str, docstill.BulkReport] = {}
-_jobs_lock = threading.Lock()
+load_env_file(Path(__file__).parent.parent / ".env")
 from docstill.errors import (
     DocumentTooLarge,
     EngineError,
@@ -26,6 +24,10 @@ from docstill.errors import (
 )
 
 app = FastAPI(title="docstill", version="0.1.0")
+
+from .platform_routes import router as platform_router  # noqa: E402
+
+app.include_router(platform_router)
 
 _STATUS = {
     UnsupportedDocumentType: 422,
@@ -114,24 +116,20 @@ async def bulk_start(
     documents = [(f.filename or "document", await f.read()) for f in files]
 
     job_id = uuid.uuid4().hex[:12]
-    initial = docstill.BulkReport(
-        engine=engine,
-        model=model,
-        total=len(documents),
-        entries=[
-            docstill.BulkFileEntry(filename=name) for name, _ in documents
-        ],
+    jobs.publish(
+        job_id,
+        docstill.BulkReport(
+            engine=engine,
+            model=model,
+            total=len(documents),
+            entries=[docstill.BulkFileEntry(filename=name) for name, _ in documents],
+        ),
     )
-    with _jobs_lock:
-        _jobs[job_id] = initial
-
-    def publish(snapshot: docstill.BulkReport) -> None:
-        with _jobs_lock:
-            _jobs[job_id] = snapshot
 
     def run() -> None:
         docstill.bulk_extract(
-            documents, schema, engine=engine, model=model, on_update=publish
+            documents, schema, engine=engine, model=model,
+            on_update=lambda snap: jobs.publish(job_id, snap),
         )
 
     threading.Thread(target=run, daemon=True).start()
@@ -140,8 +138,7 @@ async def bulk_start(
 
 @app.get("/bulk/{job_id}")
 def bulk_status(job_id: str):
-    with _jobs_lock:
-        report = _jobs.get(job_id)
+    report = jobs.get(job_id)
     if report is None:
         return JSONResponse(status_code=404, content={"error": "JobNotFound", "detail": job_id})
     return report.model_dump()
