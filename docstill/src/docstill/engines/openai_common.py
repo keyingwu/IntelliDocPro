@@ -7,14 +7,18 @@ from ..errors import EngineError
 from ..normalize import assemble_result
 from ..prompts import (
     EXTRACTION_SYSTEM,
+    REFINE_SYSTEM,
     SUGGEST_SYSTEM,
     SUGGEST_USER,
     LLMExtractionOut,
+    LLMRefinementPlan,
     LLMSuggestedSchema,
     extraction_user_prompt,
+    refine_user_prompt,
 )
+from ..refinement import apply_refinement_plan
 from ..result import ExtractionResult
-from ..schema import ExtractionSchema
+from ..schema import ExtractionSchema, SchemaChatMessage, SchemaRefinement
 from .base import Extractor, suggested_to_schema, usage_dict
 
 
@@ -74,3 +78,19 @@ class ResponsesAPIExtractor(Extractor):
         self.check_document(doc)
         suggested, _ = self._parse(doc, SUGGEST_SYSTEM, SUGGEST_USER, LLMSuggestedSchema)
         return suggested_to_schema(suggested)
+
+    def refine_schema(
+        self,
+        doc: Document,
+        schema: ExtractionSchema,
+        instruction: str,
+        history: list[SchemaChatMessage],
+    ) -> SchemaRefinement:
+        self.check_document(doc)
+        plan, _ = self._parse(
+            doc,
+            REFINE_SYSTEM,
+            refine_user_prompt(schema, instruction, history),
+            LLMRefinementPlan,
+        )
+        return apply_refinement_plan(schema, plan)

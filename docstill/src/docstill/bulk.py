@@ -69,7 +69,7 @@ def _coerce_item(item) -> Document:
 def bulk_extract(
     documents: "list[Document | bytes | str | Path | tuple[str, bytes]]",
     schema: "ExtractionSchema | dict",
-    engine: str = "claude",
+    engine: str = "openai",
     model: str | None = None,
     max_workers: int = 4,
     on_update: "Callable[[BulkReport], None] | None" = None,

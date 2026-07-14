@@ -1,6 +1,14 @@
 from enum import Enum
+from typing import Literal
 
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    TypeAdapter,
+    field_validator,
+    model_validator,
+)
 
 from .errors import SchemaValidationError
 
@@ -57,3 +65,53 @@ class ExtractionSchema(BaseModel):
             return cls.model_validate(value)
         except Exception as exc:
             raise SchemaValidationError(str(exc)) from exc
+
+
+class SchemaChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=4000)
+
+    @field_validator("content")
+    @classmethod
+    def _content_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("message content must not be blank")
+        return value.strip()
+
+
+class RejectedSchemaRequest(BaseModel):
+    request: str
+    reason: str
+
+
+class SchemaRefinement(BaseModel):
+    """The complete validated schema plus structured UI metadata."""
+
+    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
+
+    schema_value: ExtractionSchema = Field(alias="schema")
+    message: str
+    changed: bool
+    applied: list[str]
+    rejected: list[RejectedSchemaRequest]
+
+    @property
+    def schema(self) -> ExtractionSchema:
+        return self.schema_value
+
+
+_CHAT_HISTORY_ADAPTER = TypeAdapter(list[SchemaChatMessage])
+
+
+def coerce_chat_history(
+    value: "list[SchemaChatMessage | dict] | None",
+) -> list[SchemaChatMessage]:
+    if value is None:
+        return []
+    try:
+        history = _CHAT_HISTORY_ADAPTER.validate_python(value)
+    except Exception as exc:
+        raise SchemaValidationError(f"history is invalid: {exc}") from exc
+    if len(history) > 20:
+        raise SchemaValidationError("history must contain at most 20 messages")
+    return history

@@ -54,6 +54,24 @@ def test_extract_ok(client, monkeypatch):
     assert captured == {"engine": "openai", "model": "gpt-5.6-luna", "fields": ["Lieferant"]}
 
 
+def test_extract_defaults_to_openai(client, monkeypatch):
+    captured = {}
+
+    def fake_extract(doc, schema, engine, model=None, **kw):
+        captured.update(engine=engine, model=model)
+        return FAKE_RESULT
+
+    monkeypatch.setattr(app_module.docstill, "extract", fake_extract)
+    resp = client.post(
+        "/extract",
+        files={"file": ("a.pdf", PDF, "application/pdf")},
+        data={"schema": SCHEMA_JSON},
+    )
+
+    assert resp.status_code == 200
+    assert captured == {"engine": "openai", "model": None}
+
+
 def test_models_endpoint(client):
     resp = client.get("/models")
     assert resp.status_code == 200
@@ -64,7 +82,7 @@ def test_models_endpoint(client):
     assert "claude-opus-4-8" in claude_ids
     terra = next(m for m in engines["openai"]["models"] if m["id"] == "gpt-5.6-terra")
     assert terra["input_per_mtok"] == 2.5
-    assert engines["openai"]["default"] == "gpt-5.6-terra"
+    assert engines["openai"]["default"] == "gpt-5.6-luna"
     assert engines["azure_openai"]["models"] == []
 
 
@@ -244,3 +262,89 @@ def test_suggest_ok(client, monkeypatch):
     resp = client.post("/schema/suggest", files={"file": ("a.pdf", PDF, "application/pdf")})
     assert resp.status_code == 200
     assert resp.json()["fields"][0]["name"] == "Lieferant"
+
+
+def test_refine_ok(client, monkeypatch):
+    captured = {}
+
+    def fake_refine(doc, schema, instruction, history=None, engine="claude", model=None):
+        captured.update(
+            instruction=instruction,
+            history=history,
+            engine=engine,
+            model=model,
+        )
+        return docstill.SchemaRefinement(
+            schema=ExtractionSchema(
+                fields=[FieldSpec(name="Lieferant"), FieldSpec(name="Zahlungsziel")]
+            ),
+            message="Added Zahlungsziel.",
+            changed=True,
+            applied=["Added field: Zahlungsziel"],
+            rejected=[],
+        )
+
+    import docstill
+
+    monkeypatch.setattr(app_module.docstill, "refine_schema", fake_refine)
+    resp = client.post(
+        "/schema/refine",
+        files={"file": ("a.pdf", PDF, "application/pdf")},
+        data={
+            "schema": SCHEMA_JSON,
+            "instruction": "add payment terms",
+            "engine": "openai",
+            "model": "gpt-test",
+            "history": json.dumps([{"role": "user", "content": "Earlier"}]),
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.json()["schema"]["fields"][-1]["name"] == "Zahlungsziel"
+    assert captured == {
+        "instruction": "add payment terms",
+        "history": [{"role": "user", "content": "Earlier"}],
+        "engine": "openai",
+        "model": "gpt-test",
+    }
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"schema": SCHEMA_JSON, "instruction": "add B"},
+        {"schema": SCHEMA_JSON, "instruction": "   ", "engine": "claude"},
+        {"schema": "{bad", "instruction": "add B", "engine": "claude"},
+        {
+            "schema": json.dumps({"fields": []}),
+            "instruction": "add B",
+            "engine": "claude",
+        },
+        {
+            "schema": SCHEMA_JSON,
+            "instruction": "add B",
+            "engine": "claude",
+            "history": "{bad",
+        },
+        {
+            "schema": SCHEMA_JSON,
+            "instruction": "add B",
+            "engine": "claude",
+            "history": json.dumps([{"role": "system", "content": "bad"}]),
+        },
+    ],
+)
+def test_refine_invalid_form_returns_422(client, data):
+    resp = client.post(
+        "/schema/refine",
+        files={"file": ("a.pdf", PDF, "application/pdf")},
+        data=data,
+    )
+    assert resp.status_code == 422
+
+
+def test_refine_missing_file_returns_422(client):
+    resp = client.post(
+        "/schema/refine",
+        data={"schema": SCHEMA_JSON, "instruction": "add B", "engine": "claude"},
+    )
+    assert resp.status_code == 422

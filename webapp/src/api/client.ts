@@ -6,6 +6,8 @@ import type {
   Health,
   ModelsResponse,
   ResultRow,
+  SchemaChatMessage,
+  SchemaRefinement,
 } from './types'
 
 export class ApiError extends Error {
@@ -59,6 +61,24 @@ export const api = {
     form.append('engine', engine)
     if (model) form.append('model', model)
     return request<ExtractionSchema>('/schema/suggest', { method: 'POST', body: form })
+  },
+
+  refineSchema: (
+    file: File,
+    schema: ExtractionSchema,
+    instruction: string,
+    engine: string,
+    model?: string | null,
+    history?: SchemaChatMessage[],
+  ) => {
+    const form = new FormData()
+    form.append('file', file)
+    form.append('schema', JSON.stringify(schema))
+    form.append('instruction', instruction)
+    form.append('engine', engine)
+    if (model) form.append('model', model)
+    if (history && history.length > 0) form.append('history', JSON.stringify(history))
+    return request<SchemaRefinement>('/schema/refine', { method: 'POST', body: form })
   },
 
   extract: (file: File, schema: ExtractionSchema, engine: string, model?: string | null) => {

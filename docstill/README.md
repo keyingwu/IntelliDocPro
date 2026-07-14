@@ -28,7 +28,7 @@ schema = {
     ]
 }
 
-result = docstill.extract("rechnung.pdf", schema, engine="claude")
+result = docstill.extract("rechnung.pdf", schema)
 for v in result.values:
     print(v.field, v.value, v.confidence, v.source, v.needs_review)
 
@@ -46,10 +46,12 @@ suggested = docstill.suggest_schema("rechnung.pdf", engine="openai")
 | engine | 环境变量 | 默认模型 |
 |---|---|---|
 | `claude` | `ANTHROPIC_API_KEY` | `claude-opus-4-8`（`DOCSTILL_CLAUDE_MODEL` 覆盖） |
-| `openai` | `OPENAI_API_KEY` | `gpt-5.6-terra`（`DOCSTILL_OPENAI_MODEL` 覆盖） |
+| `openai` | `OPENAI_API_KEY` | `gpt-5.6-luna`（`DOCSTILL_OPENAI_MODEL` 覆盖） |
 | `azure_openai` | `AZURE_OPENAI_ENDPOINT` / `AZURE_OPENAI_API_KEY` / `AZURE_OPENAI_DEPLOYMENT` | deployment 名即模型 |
 
 大小上限: Claude 32MB，OpenAI/Azure 50MB，超限抛 `DocumentTooLarge`。
+
+未指定 engine/model 时默认使用 OpenAI `gpt-5.6-luna`。
 
 ## 价格测算与引擎对比
 

@@ -13,10 +13,14 @@ from docstill.prompts import (
     EXTRACTION_SYSTEM,
     LLMExtractionOut,
     LLMFieldOut,
+    LLMRefinedField,
+    LLMRefinementOperation,
+    LLMRefinementPlan,
     LLMSuggestedField,
     LLMSuggestedSchema,
+    REFINE_SYSTEM,
 )
-from docstill.schema import ExtractionSchema, FieldSpec, FieldType
+from docstill.schema import ExtractionSchema, FieldSpec, FieldType, SchemaChatMessage
 
 PDF_DOC = Document.from_bytes(b"%PDF-1.4 fake", filename="invoice.pdf")
 PNG_DOC = Document.from_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 8, filename="scan.png")
@@ -39,10 +43,50 @@ LLM_OUT = LLMExtractionOut(
 
 SUGGESTED = LLMSuggestedSchema(
     fields=[
-        LLMSuggestedField(name="Lieferant", type=FieldType.TEXT, description="top", enum_values=None),
-        LLMSuggestedField(name="Rating", type=FieldType.ENUM, description=None, enum_values=None),
-        LLMSuggestedField(name="Lieferant", type=FieldType.TEXT, description="dupe", enum_values=None),
+        LLMSuggestedField(
+            name="Lieferant",
+            source_label="Lieferant",
+            type=FieldType.TEXT,
+            description="top",
+            enum_values=None,
+        ),
+        LLMSuggestedField(
+            name="Rating",
+            source_label=None,
+            type=FieldType.ENUM,
+            description=None,
+            enum_values=None,
+        ),
+        LLMSuggestedField(
+            name="Lieferant",
+            source_label="Lieferant",
+            type=FieldType.TEXT,
+            description="dupe",
+            enum_values=None,
+        ),
     ]
+)
+
+REFINEMENT_PLAN = LLMRefinementPlan(
+    operations=[
+        LLMRefinementOperation(
+            action="add",
+            target_name=None,
+            field=LLMRefinedField(
+                name="Zahlungsziel",
+                type=FieldType.TEXT,
+                description="payment term",
+                enum_values=None,
+                required=False,
+            ),
+            update_fields=[],
+            evidence_text="Zahlungsziel: 30 Tage",
+            evidence_page=1,
+            reason="visible in sample",
+        )
+    ],
+    rejections=[],
+    message="Zahlungsziel wurde ergänzt.",
 )
 
 USAGE = SimpleNamespace(input_tokens=100, output_tokens=20)
@@ -101,6 +145,76 @@ def test_claude_suggest_schema_degrades_bad_enum_and_dedupes():
     assert schema.fields[1].type == FieldType.TEXT  # enum without values degraded
 
 
+def test_suggest_schema_prefers_verbatim_source_label_over_semantic_name():
+    suggested = LLMSuggestedSchema(
+        fields=[
+            LLMSuggestedField(
+                name="Steuerbetrag",
+                source_label="Gesamt Steuerbetrag",
+                type=FieldType.AMOUNT,
+                description="Normalized meaning belongs here",
+                enum_values=None,
+            )
+        ]
+    )
+    fake = FakeClaudeClient(suggested)
+    schema = ClaudeExtractor(client=fake).suggest_schema(PDF_DOC)
+    assert schema.fields[0].name == "Gesamt Steuerbetrag"
+
+
+def test_suggest_schema_uses_semantic_name_for_symbol_only_source_label():
+    suggested = LLMSuggestedSchema(
+        fields=[
+            LLMSuggestedField(
+                name="Steuersatz",
+                source_label="%",
+                type=FieldType.PERCENT,
+                description="Prozentsatz aus der Spalte %",
+                enum_values=None,
+            )
+        ]
+    )
+    fake = FakeClaudeClient(suggested)
+    schema = ClaudeExtractor(client=fake).suggest_schema(PDF_DOC)
+    assert schema.fields[0].name == "Steuersatz"
+
+
+def test_suggest_schema_removes_only_trailing_label_colon():
+    suggested = LLMSuggestedSchema(
+        fields=[
+            LLMSuggestedField(
+                name="Telefonnummer",
+                source_label="Tel. Nr.:",
+                type=FieldType.TEXT,
+                description=None,
+                enum_values=None,
+            )
+        ]
+    )
+    fake = FakeClaudeClient(suggested)
+    schema = ClaudeExtractor(client=fake).suggest_schema(PDF_DOC)
+    assert schema.fields[0].name == "Tel. Nr."
+
+
+def test_claude_refine_sends_document_schema_instruction_and_history():
+    fake = FakeClaudeClient(REFINEMENT_PLAN)
+    result = ClaudeExtractor(client=fake).refine_schema(
+        PDF_DOC,
+        SCHEMA,
+        "Zahlungsziel ergänzen",
+        [SchemaChatMessage(role="assistant", content="Vorherige Antwort")],
+    )
+
+    assert result.schema.fields[-1].name == "Zahlungsziel"
+    call = fake.calls[0]
+    assert call["system"] == REFINE_SYSTEM
+    assert call["output_format"] is LLMRefinementPlan
+    text = call["messages"][0]["content"][1]["text"]
+    assert '"fields"' in text
+    assert "Zahlungsziel ergänzen" in text
+    assert "Vorherige Antwort" in text
+
+
 def test_openai_extract_pdf_builds_input_file():
     fake = FakeOpenAIClient(LLM_OUT)
     engine = OpenAIExtractor(client=fake, model="gpt-test")
@@ -121,6 +235,19 @@ def test_openai_image_part():
     assert part["image_url"].startswith("data:image/png;base64,")
 
 
+def test_openai_refine_uses_shared_structured_output():
+    fake = FakeOpenAIClient(REFINEMENT_PLAN)
+    result = OpenAIExtractor(client=fake, model="gpt-test").refine_schema(
+        PDF_DOC, SCHEMA, "add payment terms", []
+    )
+
+    assert result.changed is True
+    call = fake.calls[0]
+    assert call["instructions"] == REFINE_SYSTEM
+    assert call["text_format"] is LLMRefinementPlan
+    assert call["input"][0]["content"][0]["type"] == "input_file"
+
+
 def test_pdf_part_filename_fallback():
     doc = Document.from_bytes(b"%PDF-1.4 fake", filename="weird.bin")
     assert document_part(doc)["filename"] == "document.pdf"
@@ -132,6 +259,15 @@ def test_azure_uses_deployment_as_model():
     result = engine.extract(PDF_DOC, SCHEMA)
     assert result.model == "my-deployment"
     assert fake.calls[0]["model"] == "my-deployment"
+
+
+def test_azure_refine_uses_deployment_and_shared_output():
+    fake = FakeOpenAIClient(REFINEMENT_PLAN)
+    engine = AzureOpenAIExtractor(client=fake, model="my-deployment")
+    result = engine.refine_schema(PDF_DOC, SCHEMA, "add payment terms", [])
+    assert result.schema.fields[-1].name == "Zahlungsziel"
+    assert fake.calls[0]["model"] == "my-deployment"
+    assert fake.calls[0]["text_format"] is LLMRefinementPlan
 
 
 def test_size_limit_enforced():
@@ -174,5 +310,5 @@ def test_default_models(monkeypatch):
     assert engine.model == "gpt-5.6-sol"
 
     monkeypatch.delenv("DOCSTILL_OPENAI_MODEL")
-    assert OpenAIExtractor(client=FakeOpenAIClient(LLM_OUT)).model == "gpt-5.6-terra"
+    assert OpenAIExtractor(client=FakeOpenAIClient(LLM_OUT)).model == "gpt-5.6-luna"
     assert ClaudeExtractor(client=FakeClaudeClient(LLM_OUT)).model == "claude-opus-4-8"

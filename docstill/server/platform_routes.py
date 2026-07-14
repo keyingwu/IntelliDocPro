@@ -23,7 +23,7 @@ class AssistantIn(BaseModel):
 
     name: str
     description: str = ""
-    engine: str = "claude"
+    engine: str = "openai"
     model: str | None = None
     extraction_schema: docstill.ExtractionSchema = Field(alias="schema")
 

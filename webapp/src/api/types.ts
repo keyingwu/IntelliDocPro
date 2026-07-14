@@ -15,6 +15,24 @@ export interface ExtractionSchema {
   fields: FieldSpec[]
 }
 
+export interface SchemaChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+export interface RejectedSchemaRequest {
+  request: string
+  reason: string
+}
+
+export interface SchemaRefinement {
+  schema: ExtractionSchema
+  message: string
+  changed: boolean
+  applied: string[]
+  rejected: RejectedSchemaRequest[]
+}
+
 export interface SourceRef {
   page?: number | null
   location?: string | null

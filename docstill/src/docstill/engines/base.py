@@ -3,7 +3,13 @@ from abc import ABC, abstractmethod
 from ..document import Document
 from ..prompts import LLMSuggestedSchema
 from ..result import ExtractionResult
-from ..schema import ExtractionSchema, FieldSpec, FieldType
+from ..schema import (
+    ExtractionSchema,
+    FieldSpec,
+    FieldType,
+    SchemaChatMessage,
+    SchemaRefinement,
+)
 
 
 class Extractor(ABC):
@@ -30,6 +36,15 @@ class Extractor(ABC):
     @abstractmethod
     def suggest_schema(self, doc: Document) -> ExtractionSchema: ...
 
+    @abstractmethod
+    def refine_schema(
+        self,
+        doc: Document,
+        schema: ExtractionSchema,
+        instruction: str,
+        history: list[SchemaChatMessage],
+    ) -> SchemaRefinement: ...
+
     def check_document(self, doc: Document) -> None:
         doc.ensure_max_size(self.max_bytes, engine=self.name)
 
@@ -43,7 +58,10 @@ def suggested_to_schema(suggested: LLMSuggestedSchema) -> ExtractionSchema:
     fields = []
     seen: set[str] = set()
     for f in suggested.fields:
-        name = f.name.strip()
+        source_label = (f.source_label or "").strip().rstrip(":：").rstrip()
+        if source_label and not any(character.isalnum() for character in source_label):
+            source_label = ""
+        name = source_label or f.name.strip()
         if not name or name in seen:
             continue
         seen.add(name)

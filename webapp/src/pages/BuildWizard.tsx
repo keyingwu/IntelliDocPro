@@ -4,13 +4,18 @@ import {
   ArrowRight,
   CheckCircle2,
   CircleAlert,
+  FileCheck2,
   FlaskConical,
   Loader2,
   Plus,
+  Save,
+  Send,
+  Sparkles,
   Trash2,
+  Undo2,
   XCircle,
 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import type {
@@ -19,10 +24,17 @@ import type {
   FieldSpec,
   FieldType,
   FieldValue,
+  SchemaChatMessage,
 } from '../api/types'
 import PdfPreview, { type Highlight } from '../components/PdfPreview'
 import UploadDropzone from '../components/UploadDropzone'
 import { t } from '../i18n'
+import {
+  initialSchemaRefineState,
+  sampleFileKey,
+  schemaRefineReducer,
+  type RefineChatEntry,
+} from './schemaRefineState'
 import './wizard.css'
 
 const FIELD_TYPES: FieldType[] = ['text', 'number', 'date', 'amount', 'percent', 'enum']
@@ -111,10 +123,6 @@ function FieldRow({
   onRemove: () => void
   onHover: (hovering: boolean) => void
 }) {
-  const cycleType = () => {
-    const next = FIELD_TYPES[(FIELD_TYPES.indexOf(field.type) + 1) % FIELD_TYPES.length]
-    onChange({ ...field, type: next, enum_values: next === 'enum' ? field.enum_values ?? [] : null })
-  }
   return (
     <div
       className="field-row"
@@ -122,17 +130,29 @@ function FieldRow({
       onMouseLeave={() => onHover(false)}
     >
       <div className="field-row-main">
-        <button
-          className="type-chip"
+        <select
+          className="type-select"
           style={{
             color: `var(--type-${field.type})`,
             background: `var(--type-${field.type}-bg)`,
           }}
-          onClick={cycleType}
-          title="Click to change type"
+          value={field.type}
+          aria-label={t('fields.type.label')}
+          onChange={(event) => {
+            const next = event.target.value as FieldType
+            onChange({
+              ...field,
+              type: next,
+              enum_values: next === 'enum' ? field.enum_values ?? [] : null,
+            })
+          }}
         >
-          {field.type}
-        </button>
+          {FIELD_TYPES.map((type) => (
+            <option key={type} value={type}>
+              {type}
+            </option>
+          ))}
+        </select>
         <input
           className="input field-name"
           value={field.name}
@@ -181,6 +201,156 @@ function FieldRow({
         </div>
       )}
     </div>
+  )
+}
+
+interface RefineRequest {
+  requestId: string
+  instruction: string
+  sampleKey: string
+  file: File
+  fields: FieldSpec[]
+  history: SchemaChatMessage[]
+  engine: string
+  model: string | null
+}
+
+function SchemaRefinePanel({
+  messages,
+  instruction,
+  sampleFile,
+  isPending,
+  canUndo,
+  onInstruction,
+  onSend,
+  onUndo,
+  onAddManually,
+}: {
+  messages: RefineChatEntry[]
+  instruction: string
+  sampleFile: File | null
+  isPending: boolean
+  canUndo: boolean
+  onInstruction: (value: string) => void
+  onSend: () => void
+  onUndo: () => void
+  onAddManually: (request: string) => void
+}) {
+  const canSend = sampleFile !== null && instruction.trim().length > 0 && !isPending
+
+  return (
+    <section className={`refine-card${sampleFile ? '' : ' locked'}`}>
+      <div className="refine-head">
+        <span className="refine-mark">
+          <Sparkles size={15} />
+        </span>
+        <div>
+          <h3>{t('fields.ai.title')}</h3>
+          <p>{t('fields.ai.subtitle')}</p>
+        </div>
+        {sampleFile && (
+          <span className="sample-chip" title={sampleFile.name}>
+            <FileCheck2 size={13} />
+            {sampleFile.name}
+          </span>
+        )}
+      </div>
+
+      <div className={`refine-thread${messages.length === 0 ? ' empty' : ''}`} aria-live="polite">
+        {messages.length === 0 ? (
+          <div className="refine-intro">
+            {sampleFile ? t('fields.ai.intro') : t('fields.ai.needsSample')}
+          </div>
+        ) : (
+          messages.map((message) => (
+            <div key={message.id} className={`refine-message ${message.role}`}>
+              <div className="refine-message-label">
+                {message.role === 'user'
+                  ? t('fields.ai.you')
+                  : message.role === 'assistant'
+                    ? t('fields.ai.assistant')
+                    : t('fields.ai.notice')}
+              </div>
+              <div>{message.content}</div>
+              {message.result && message.result.applied.length > 0 && (
+                <div className="refine-applied">
+                  {message.result.applied.map((item) => (
+                    <span key={item}>{item}</span>
+                  ))}
+                </div>
+              )}
+              {message.result && message.result.rejected.length > 0 && (
+                <div className="refine-rejections">
+                  {message.result.rejected.map((item, index) => (
+                    <div key={`${item.request}-${index}`} className="refine-rejection">
+                      <div>
+                        <strong>{item.request}</strong>
+                        <span>{item.reason}</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-ghost manual-shortcut"
+                        onClick={() => onAddManually(item.request)}
+                      >
+                        <Plus size={13} />
+                        {t('fields.ai.addManually')}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))
+        )}
+        {isPending && (
+          <div className="refine-thinking">
+            <Loader2 size={14} className="spin" />
+            {t('fields.ai.thinking')}
+          </div>
+        )}
+      </div>
+
+      {canUndo && (
+        <button type="button" className="refine-undo" onClick={onUndo}>
+          <Undo2 size={14} />
+          {t('fields.ai.undo')}
+        </button>
+      )}
+
+      <form
+        className="refine-composer"
+        onSubmit={(event) => {
+          event.preventDefault()
+          if (canSend) onSend()
+        }}
+      >
+        <textarea
+          className="input"
+          rows={2}
+          maxLength={4000}
+          value={instruction}
+          disabled={sampleFile === null || isPending}
+          placeholder={
+            sampleFile ? t('fields.ai.placeholder') : t('fields.ai.placeholderLocked')
+          }
+          onChange={(event) => onInstruction(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+              event.preventDefault()
+              if (canSend) onSend()
+            }
+          }}
+        />
+        <button
+          type="submit"
+          className="refine-send"
+          disabled={!canSend}
+          aria-label={t('fields.ai.send')}
+        >
+          {isPending ? <Loader2 size={16} className="spin" /> : <Send size={16} />}
+        </button>
+      </form>
+    </section>
   )
 }
 
@@ -300,13 +470,45 @@ export default function BuildWizard() {
   const [step, setStep] = useState(routeId ? Number(searchParams.get('step') ?? 2) : 1)
   const [assistantId, setAssistantId] = useState<string | null>(routeId ?? null)
   const [name, setName] = useState('')
-  const [engine, setEngine] = useState('claude')
+  const [engine, setEngine] = useState('openai')
   const [model, setModel] = useState('')
-  const [fields, setFields] = useState<FieldSpec[]>([])
+  const [refineState, dispatchRefine] = useReducer(
+    schemaRefineReducer,
+    undefined,
+    () => initialSchemaRefineState(),
+  )
+  const [instruction, setInstruction] = useState('')
   const [sampleFile, setSampleFile] = useState<File | null>(null)
   const [testResult, setTestResult] = useState<ExtractionResult | null>(null)
   const [highlight, setHighlight] = useState<Highlight | null>(null)
   const [fallbackNote, setFallbackNote] = useState<string | null>(null)
+  const hydratedAssistantId = useRef<string | null>(null)
+  const requestCounter = useRef(0)
+  const refineStateRef = useRef(refineState)
+  const fields = refineState.fields
+
+  useEffect(() => {
+    refineStateRef.current = refineState
+  }, [refineState])
+
+  const clearTestContext = () => {
+    setTestResult(null)
+    setHighlight(null)
+    setFallbackNote(null)
+  }
+
+  const applyManualFields = (nextFields: FieldSpec[]) => {
+    saveSchema.reset()
+    dispatchRefine({ type: 'manual-change', fields: nextFields })
+    clearTestContext()
+  }
+
+  const handleSampleFile = (file: File) => {
+    setSampleFile(file)
+    dispatchRefine({ type: 'sample-replaced' })
+    setInstruction('')
+    clearTestContext()
+  }
 
   // edit mode: hydrate from the stored assistant
   const existing = useQuery({
@@ -315,11 +517,12 @@ export default function BuildWizard() {
     enabled: !!routeId,
   })
   useEffect(() => {
-    if (existing.data) {
+    if (existing.data && hydratedAssistantId.current !== existing.data.id) {
+      hydratedAssistantId.current = existing.data.id
       setName(existing.data.name)
       setEngine(existing.data.engine)
       setModel(existing.data.model ?? '')
-      setFields(existing.data.schema.fields)
+      dispatchRefine({ type: 'hydrate', fields: existing.data.schema.fields })
     }
   }, [existing.data])
 
@@ -337,7 +540,7 @@ export default function BuildWizard() {
     onSuccess: (assistant) => {
       setAssistantId(assistant.id)
       setName(assistant.name)
-      setFields(assistant.schema.fields)
+      dispatchRefine({ type: 'hydrate', fields: assistant.schema.fields })
       setStep(2)
     },
   })
@@ -353,21 +556,88 @@ export default function BuildWizard() {
     onSuccess: (assistant) => {
       setAssistantId(assistant.id)
       setName(assistant.name)
-      setFields(assistant.schema.fields)
+      dispatchRefine({ type: 'hydrate', fields: assistant.schema.fields })
       setStep(2)
     },
   })
 
+  const updateAssistant = () =>
+    api.updateAssistant(assistantId!, {
+      name,
+      engine,
+      model: model || null,
+      schema: { fields },
+    })
+
+  const saveSchema = useMutation({
+    mutationFn: updateAssistant,
+  })
+
   const saveAndContinue = useMutation({
-    mutationFn: () =>
-      api.updateAssistant(assistantId!, {
-        name,
-        engine,
-        model: model || null,
-        schema: { fields },
-      }),
+    mutationFn: updateAssistant,
     onSuccess: () => setStep(3),
   })
+
+  const refine = useMutation({
+    mutationFn: (request: RefineRequest) =>
+      api.refineSchema(
+        request.file,
+        { fields: request.fields },
+        request.instruction,
+        request.engine,
+        request.model,
+        request.history,
+      ),
+    onSuccess: (result, request) => {
+      const current = refineStateRef.current
+      const applies =
+        current.pending?.id === request.requestId &&
+        current.pending.revision === current.revision &&
+        current.pending.sampleKey === request.sampleKey
+      dispatchRefine({
+        type: 'refine-succeeded',
+        requestId: request.requestId,
+        sampleKey: request.sampleKey,
+        result,
+      })
+      if (applies && result.changed) {
+        saveSchema.reset()
+        clearTestContext()
+      }
+    },
+    onError: (error, request) => {
+      dispatchRefine({
+        type: 'refine-failed',
+        requestId: request.requestId,
+        message: error instanceof Error ? error.message : String(error),
+      })
+    },
+  })
+
+  const sendRefine = () => {
+    const cleanInstruction = instruction.trim()
+    if (!sampleFile || !cleanInstruction || refine.isPending) return
+    const requestId = `refine-${Date.now()}-${++requestCounter.current}`
+    const sampleKey = sampleFileKey(sampleFile)
+    const request: RefineRequest = {
+      requestId,
+      instruction: cleanInstruction,
+      sampleKey,
+      file: sampleFile,
+      fields,
+      history: refineState.history,
+      engine,
+      model: model || null,
+    }
+    dispatchRefine({
+      type: 'refine-started',
+      requestId,
+      instruction: cleanInstruction,
+      sampleKey,
+    })
+    setInstruction('')
+    refine.mutate(request)
+  }
 
   const test = useMutation({
     mutationFn: () => api.extract(sampleFile!, { fields }, engine, model || null),
@@ -406,6 +676,7 @@ export default function BuildWizard() {
   const fieldsValid =
     fields.length > 0 &&
     fields.every((f) => f.name.trim().length > 0) &&
+    fields.every((f) => f.type !== 'enum' || (f.enum_values?.length ?? 0) > 0) &&
     new Set(fields.map((f) => f.name.trim())).size === fields.length
 
   const steps = [t('wizard.step.sample'), t('wizard.step.fields'), t('wizard.step.bulk')]
@@ -423,7 +694,10 @@ export default function BuildWizard() {
               className="name-input"
               value={name}
               placeholder={t('wizard.name.placeholder')}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                saveSchema.reset()
+                setName(e.target.value)
+              }}
             />
           </h1>
         </div>
@@ -444,7 +718,18 @@ export default function BuildWizard() {
 
       {step === 1 && (
         <div className="sample-stage rise">
-          <EngineModelPicker engine={engine} model={model} onEngine={setEngine} onModel={setModel} />
+          <EngineModelPicker
+            engine={engine}
+            model={model}
+            onEngine={(nextEngine) => {
+              saveSchema.reset()
+              setEngine(nextEngine)
+            }}
+            onModel={(nextModel) => {
+              saveSchema.reset()
+              setModel(nextModel)
+            }}
+          />
           {suggest.isPending ? (
             <div className="analyzing card">
               <Loader2 size={22} className="spin" style={{ color: 'var(--teal)' }} />
@@ -456,7 +741,7 @@ export default function BuildWizard() {
               body={t('sample.drop.body')}
               buttonLabel={t('sample.drop.button')}
               onFiles={(files) => {
-                setSampleFile(files[0])
+                handleSampleFile(files[0])
                 suggest.mutate(files[0])
               }}
             >
@@ -476,22 +761,60 @@ export default function BuildWizard() {
               <h3>{t('fields.title')}</h3>
               <span className="muted">{fields.length}</span>
             </div>
-            <EngineModelPicker engine={engine} model={model} onEngine={setEngine} onModel={setModel} />
+            <EngineModelPicker
+              engine={engine}
+              model={model}
+              onEngine={(nextEngine) => {
+                saveSchema.reset()
+                setEngine(nextEngine)
+              }}
+              onModel={(nextModel) => {
+                saveSchema.reset()
+                setModel(nextModel)
+              }}
+            />
+            <SchemaRefinePanel
+              messages={refineState.messages}
+              instruction={instruction}
+              sampleFile={sampleFile}
+              isPending={refine.isPending}
+              canUndo={refineState.undoSnapshot !== null}
+              onInstruction={setInstruction}
+              onSend={sendRefine}
+              onUndo={() => {
+                saveSchema.reset()
+                dispatchRefine({ type: 'undo' })
+                clearTestContext()
+              }}
+              onAddManually={(request) => {
+                const requestedName = request.trim()
+                const nameAvailable = !fields.some((field) => field.name === requestedName)
+                applyManualFields([
+                  ...fields,
+                  {
+                    name: nameAvailable && requestedName.length <= 80 ? requestedName : '',
+                    type: 'text',
+                  },
+                ])
+              }}
+            />
             <div className="fields-list">
               {fields.map((field, i) => (
                 <FieldRow
                   key={i}
                   field={field}
                   extracted={extractedByField.get(field.name)}
-                  onChange={(next) => setFields(fields.map((f, j) => (j === i ? next : f)))}
-                  onRemove={() => setFields(fields.filter((_, j) => j !== i))}
+                  onChange={(next) =>
+                    applyManualFields(fields.map((f, j) => (j === i ? next : f)))
+                  }
+                  onRemove={() => applyManualFields(fields.filter((_, j) => j !== i))}
                   onHover={(hovering) => hoverField(field, hovering)}
                 />
               ))}
             </div>
             <button
               className="btn btn-ghost add-field"
-              onClick={() => setFields([...fields, { name: '', type: 'text' }])}
+              onClick={() => applyManualFields([...fields, { name: '', type: 'text' }])}
             >
               <Plus size={15} />
               {t('fields.add')}
@@ -508,14 +831,37 @@ export default function BuildWizard() {
                 </button>
               )}
               <button
+                className={`btn btn-ghost schema-save${saveSchema.isSuccess ? ' saved' : ''}`}
+                disabled={!fieldsValid || saveSchema.isPending || saveAndContinue.isPending}
+                onClick={() => saveSchema.mutate()}
+              >
+                {saveSchema.isPending ? (
+                  <Loader2 size={15} className="spin" />
+                ) : saveSchema.isSuccess ? (
+                  <CheckCircle2 size={15} />
+                ) : (
+                  <Save size={15} />
+                )}
+                {saveSchema.isPending
+                  ? t('fields.saving')
+                  : saveSchema.isSuccess
+                    ? t('fields.saved')
+                    : t('fields.save')}
+              </button>
+              <button
                 className="btn btn-primary"
-                disabled={!fieldsValid || saveAndContinue.isPending}
+                disabled={!fieldsValid || saveAndContinue.isPending || saveSchema.isPending}
                 onClick={() => saveAndContinue.mutate()}
               >
                 {t('fields.continue')}
                 <ArrowRight size={16} />
               </button>
             </div>
+            {saveSchema.isError ? (
+              <div className="error-note fields-save-error" role="alert">
+                {t('fields.save.error', { message: String(saveSchema.error) })}
+              </div>
+            ) : null}
           </div>
           <div className="preview-pane card">
             {sampleFile ? (
@@ -527,7 +873,15 @@ export default function BuildWizard() {
                 <PdfPreview file={sampleFile} highlight={highlight} />
               </>
             ) : (
-              <div className="preview-empty">{t('fields.preview.empty')}</div>
+              <div className="preview-upload">
+                <UploadDropzone
+                  compact
+                  title={t('fields.sample.title')}
+                  body={t('fields.sample.body')}
+                  buttonLabel={t('fields.sample.button')}
+                  onFiles={(files) => handleSampleFile(files[0])}
+                />
+              </div>
             )}
           </div>
         </div>

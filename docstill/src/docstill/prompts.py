@@ -10,7 +10,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from .schema import ExtractionSchema, FieldType
+from .schema import ExtractionSchema, FieldType, SchemaChatMessage
 
 
 class LLMFieldOut(BaseModel):
@@ -29,6 +29,7 @@ class LLMExtractionOut(BaseModel):
 
 class LLMSuggestedField(BaseModel):
     name: str
+    source_label: str | None
     type: FieldType
     description: str | None
     enum_values: list[str] | None
@@ -36,6 +37,37 @@ class LLMSuggestedField(BaseModel):
 
 class LLMSuggestedSchema(BaseModel):
     fields: list[LLMSuggestedField]
+
+
+class LLMRefinedField(BaseModel):
+    name: str
+    type: FieldType
+    description: str | None
+    enum_values: list[str] | None
+    required: bool
+
+
+class LLMRefinementOperation(BaseModel):
+    action: Literal["add", "update", "delete"]
+    target_name: str | None
+    field: LLMRefinedField | None
+    update_fields: list[
+        Literal["name", "type", "description", "enum_values", "required"]
+    ]
+    evidence_text: str | None
+    evidence_page: int | None
+    reason: str
+
+
+class LLMRefinementRejection(BaseModel):
+    request: str
+    reason: str
+
+
+class LLMRefinementPlan(BaseModel):
+    operations: list[LLMRefinementOperation]
+    rejections: list[LLMRefinementRejection]
+    message: str
 
 
 _TYPE_RULES = {
@@ -88,20 +120,118 @@ def extraction_user_prompt(schema: ExtractionSchema) -> str:
     )
 
 
-SUGGEST_SYSTEM = """\
-You are a document analysis engine. You receive one sample document
-(PDF or image) and propose an extraction schema for documents of this kind.
-
-Rules:
-- Identify the key fields a business user would want to extract from
-  documents of this type (typically 4 to 10 fields).
-- Use concise field names in the language of the document.
+_SCHEMA_RULES = """\
+- For fields proposed from the document, copy the exact printed field label
+  into `name` whenever one exists. Preserve its original wording,
+  capitalization, punctuation, abbreviations, and spacing. Do not translate,
+  shorten, expand, normalize, or replace it with a semantic business name.
+  Put normalized meaning or clarification in `description`, never in `name`.
+- Treat a colon printed at the very end of a label (`:` or `：`) as a visual
+  separator, not part of the field name. Remove only that trailing separator:
+  for example, `Belegdatum:` becomes `Belegdatum`, while the periods in
+  `Tel. Nr.:` are preserved and the name becomes `Tel. Nr.`.
+- Only when no explicit usable label exists may you create a concise `name` in
+  the document's language; explain in `description` that it was inferred from
+  the visible location or context. A label containing only a unit or symbol
+  such as `%`, `€`, or `$` is not a usable text label: in that case create a
+  clear semantic name such as `Steuersatz`, while keeping the symbol's meaning
+  in `description`.
 - Pick the most specific matching type: text, number, date, amount, percent,
   or enum. Use `enum` only when the document implies a small closed set of
   values, and list those values in `enum_values`; otherwise set it to null.
 - `description` is a one-line extraction hint for each field.
+- Only propose scalar fields: one value per named field per document.
+- A specifically named, uniquely identifiable row or category shown in a table
+  may still be a scalar field when it appears once, or has one document-level
+  total, and has one value. If the user requests multiple such fixed rows,
+  create one separate scalar field for every confirmed printed label.
+- Do not create generic line-item schemas, arrays, repeating columns, or a new
+  field for every arbitrary or variable row in a line-item/transaction table.
 """
+
+SUGGEST_SYSTEM = f"""\
+You are a document analysis engine. You receive one sample document
+(PDF or image) and propose an extraction schema for documents of this kind.
+
+Rules:
+- Be comprehensive: propose every field a business user could plausibly want
+  to extract from documents of this type, not just the most prominent ones.
+  Business documents often justify 8 to 20 fields. When unsure whether a
+  field is useful, include it; the user can delete fields far more easily
+  than discover missing ones.
+- For every field, set `source_label` to the visible usable text label, with a
+  terminal colon separator removed, or null when no such label exists. Use
+  null for symbol-only/unit-only labels such as `%`. When `source_label` is not
+  null, `name` must initially equal it exactly. For example, a printed label
+  `Gesamt Steuerbetrag` must stay `Gesamt Steuerbetrag`, not `Steuerbetrag`;
+  `Gesamtbetrag Rechnung` must not become `Gesamtbetrag`.
+{_SCHEMA_RULES}"""
 
 SUGGEST_USER = (
     "Analyze the attached sample document and propose an extraction schema for it."
 )
+
+REFINE_SYSTEM = f"""\
+You are a document analysis engine planning safe changes to an extraction
+schema. You receive one sample document, the complete current schema as JSON,
+the conversation history, and the user's latest instruction.
+
+Rules:
+- Return only the requested add, update, and delete operations. Deterministic
+  application code will produce the complete schema after your response.
+- Never emit an operation for an existing field unless the latest instruction
+  explicitly asks to change, rename, or delete that field.
+- An add operation is allowed only when the sample visibly confirms the field:
+  an explicit label, a label and value, or an unambiguous value-bearing region.
+  A field that is merely common for this document type is NOT confirmed.
+- Every add operation must include a short verbatim `evidence_text` from the
+  sample and its 1-based `evidence_page`. If you cannot provide both, reject
+  the requested field instead of adding or guessing it.
+- For add operations with an explicit usable printed text label, the added
+  field's `name` must equal that label verbatim. The evidence should include
+  the same label. Symbol-only labels may use a semantic name as described above.
+- Update and delete operations target existing fields by their exact current
+  name. They do not require document evidence because the user is explicitly
+  editing the current schema.
+- For update operations, `update_fields` must list only the field properties
+  that the latest instruction explicitly asks to change. Values for every
+  property not listed there are ignored and preserved from the current schema.
+  For add and delete operations, set `update_fields` to an empty list.
+- Multiple requests may partially succeed. Emit valid operations for confirmed
+  requests and one rejection entry per request that cannot be fulfilled.
+- Do not reject a requested field merely because its value is displayed in a
+  table. A fixed, explicitly named row with one value is eligible as a scalar
+  field. For example, if the sample visibly shows separate single-value rows
+  named `Fracht Versandort - Empfangsort`, `Road tax`, and `Fuel Surcharge`, a
+  request for those three separate costs should produce three add operations.
+- Preserve field order conceptually: additions append; updates keep position.
+- `message` is a brief user-facing summary in the language of the latest user
+  instruction. Mention both completed changes and rejected requests.
+{_SCHEMA_RULES}"""
+
+
+def refine_user_prompt(
+    schema: ExtractionSchema,
+    instruction: str,
+    history: "list[SchemaChatMessage] | None" = None,
+) -> str:
+    import json
+
+    parts = [
+        "Complete current schema (authoritative):",
+        json.dumps(schema.model_dump(mode="json"), ensure_ascii=False),
+    ]
+    if history:
+        parts.extend(
+            [
+                "Earlier conversation (context only; the schema above is authoritative):",
+                json.dumps(
+                    [message.model_dump(mode="json") for message in history],
+                    ensure_ascii=False,
+                ),
+            ]
+        )
+    else:
+        parts.extend(["Earlier conversation:", "[]"])
+    parts.extend(["Latest user instruction:", instruction])
+    return "\n".join(parts)

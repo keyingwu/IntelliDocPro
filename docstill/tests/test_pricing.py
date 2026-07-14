@@ -65,5 +65,5 @@ def test_custom_price_table():
 
 def test_all_default_engine_models_priced():
     # the three engines' default models must always be in the table
-    for model in ("claude-opus-4-8", "gpt-5.6-terra"):
+    for model in ("claude-opus-4-8", "gpt-5.6-luna"):
         assert model in PRICES

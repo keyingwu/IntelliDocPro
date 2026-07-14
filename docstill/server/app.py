@@ -89,7 +89,7 @@ def models():
 async def extract(
     file: UploadFile = File(...),
     extraction_schema: str = Form(..., alias="schema"),
-    engine: str = Form("claude"),
+    engine: str = Form("openai"),
     model: str | None = Form(None),
 ):
     try:
@@ -130,7 +130,7 @@ async def compare(
 async def bulk_start(
     files: list[UploadFile] = File(...),
     extraction_schema: str = Form(..., alias="schema"),
-    engine: str = Form("claude"),
+    engine: str = Form("openai"),
     model: str | None = Form(None),
 ):
     """Start a bulk extraction job over many files. Returns a job_id
@@ -178,13 +178,46 @@ def bulk_status(job_id: str):
 @app.post("/schema/suggest")
 async def suggest(
     file: UploadFile = File(...),
-    engine: str = Form("claude"),
+    engine: str = Form("openai"),
     model: str | None = Form(None),
 ):
     data = await file.read()
     doc = docstill.Document.from_bytes(data, filename=file.filename or "document")
     schema = docstill.suggest_schema(doc, engine=engine, model=model)
     return schema.model_dump()
+
+
+@app.post("/schema/refine")
+async def refine_schema(
+    file: UploadFile = File(...),
+    extraction_schema: str = Form(..., alias="schema"),
+    instruction: str = Form(...),
+    engine: str = Form(...),
+    model: str | None = Form(None),
+    history: str | None = Form(None),
+):
+    if not instruction.strip():
+        raise SchemaValidationError("instruction must not be blank")
+    try:
+        schema_dict = json.loads(extraction_schema)
+    except json.JSONDecodeError as exc:
+        raise SchemaValidationError(f"schema is not valid JSON: {exc}") from exc
+    try:
+        history_value = json.loads(history) if history else None
+    except json.JSONDecodeError as exc:
+        raise SchemaValidationError(f"history is not valid JSON: {exc}") from exc
+
+    data = await file.read()
+    doc = docstill.Document.from_bytes(data, filename=file.filename or "document")
+    result = docstill.refine_schema(
+        doc,
+        schema_dict,
+        instruction,
+        history=history_value,
+        engine=engine,
+        model=model,
+    )
+    return result.model_dump(mode="json")
 
 
 # ---- production static hosting of the webapp (single-process deploy) ----

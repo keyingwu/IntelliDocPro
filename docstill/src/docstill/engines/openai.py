@@ -5,7 +5,7 @@ from openai import OpenAI
 from ..errors import EngineNotConfigured
 from .openai_common import ResponsesAPIExtractor
 
-DEFAULT_MODEL = "gpt-5.6-terra"
+DEFAULT_MODEL = "gpt-5.6-luna"
 
 
 class OpenAIExtractor(ResponsesAPIExtractor):

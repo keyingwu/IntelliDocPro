@@ -31,7 +31,28 @@ export default function PdfPreview({ file, highlight }: Props) {
   const [doc, setDoc] = useState<PDFDocumentProxy | null>(null)
   const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [rendered, setRendered] = useState(false)
+  const [containerWidth, setContainerWidth] = useState(0)
   const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+
+  // Keep PDF pages fitted to the actual preview pane. The field editor and
+  // preview are responsive columns, so a fixed PDF scale clips both edges.
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container || !isPdf) return
+
+    const updateWidth = (width: number) => {
+      const rounded = Math.floor(width)
+      setContainerWidth((current) => (Math.abs(current - rounded) < 2 ? current : rounded))
+    }
+    updateWidth(container.clientWidth)
+
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0]
+      if (entry) updateWidth(entry.contentRect.width)
+    })
+    observer.observe(container)
+    return () => observer.disconnect()
+  }, [isPdf])
 
   // load document
   useEffect(() => {
@@ -55,16 +76,19 @@ export default function PdfPreview({ file, highlight }: Props) {
 
   // render pages + text layers
   useEffect(() => {
-    if (!doc || !containerRef.current) return
+    if (!doc || !containerRef.current || containerWidth <= 0) return
     let cancelled = false
     const container = containerRef.current
     container.innerHTML = ''
+    setRendered(false)
 
     const renderAll = async () => {
       for (let n = 1; n <= doc.numPages; n++) {
         if (cancelled) return
         const page = await doc.getPage(n)
-        const viewport = page.getViewport({ scale: 1.35 })
+        const baseViewport = page.getViewport({ scale: 1 })
+        const scale = Math.min(1.5, containerWidth / baseViewport.width)
+        const viewport = page.getViewport({ scale })
 
         const pageDiv = document.createElement('div')
         pageDiv.className = 'pdf-page'
@@ -73,8 +97,9 @@ export default function PdfPreview({ file, highlight }: Props) {
         pageDiv.style.height = `${viewport.height}px`
 
         const canvas = document.createElement('canvas')
-        canvas.width = viewport.width * devicePixelRatio
-        canvas.height = viewport.height * devicePixelRatio
+        const outputScale = window.devicePixelRatio || 1
+        canvas.width = Math.ceil(viewport.width * outputScale)
+        canvas.height = Math.ceil(viewport.height * outputScale)
         canvas.style.width = `${viewport.width}px`
         canvas.style.height = `${viewport.height}px`
         pageDiv.appendChild(canvas)
@@ -82,13 +107,13 @@ export default function PdfPreview({ file, highlight }: Props) {
         const textDiv = document.createElement('div')
         textDiv.className = 'textLayer'
         // pdf.js text layer positions itself off this CSS variable
-        textDiv.style.setProperty('--scale-factor', '1.35')
+        textDiv.style.setProperty('--scale-factor', String(scale))
         pageDiv.appendChild(textDiv)
 
         container.appendChild(pageDiv)
 
         const ctx = canvas.getContext('2d')!
-        ctx.scale(devicePixelRatio, devicePixelRatio)
+        ctx.setTransform(outputScale, 0, 0, outputScale, 0, 0)
         await page.render({ canvas, canvasContext: ctx, viewport }).promise
         await new TextLayer({
           textContentSource: page.streamTextContent(),
@@ -102,7 +127,7 @@ export default function PdfPreview({ file, highlight }: Props) {
     return () => {
       cancelled = true
     }
-  }, [doc])
+  }, [containerWidth, doc])
 
   // apply highlight
   useEffect(() => {
