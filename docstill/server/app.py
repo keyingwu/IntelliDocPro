@@ -1,11 +1,15 @@
 """HTTP wrapper around docstill. Run with: uvicorn server.app:app"""
 
 import json
+from pathlib import Path
 
 from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.responses import JSONResponse
 
 import docstill
+from docstill.envfile import load_env_file
+
+load_env_file(Path(__file__).parent.parent / ".env")
 from docstill.errors import (
     DocumentTooLarge,
     EngineError,

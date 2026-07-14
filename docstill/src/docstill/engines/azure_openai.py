@@ -21,8 +21,12 @@ class AzureOpenAIExtractor(ResponsesAPIExtractor):
                 missing = [v for v in _REQUIRED_VARS if not os.environ.get(v)]
                 raise EngineNotConfigured(f"missing environment variables: {', '.join(missing)}")
             endpoint = os.environ["AZURE_OPENAI_ENDPOINT"].rstrip("/")
+            # accept both the bare resource endpoint and one that already
+            # includes the /openai/v1 path
+            if not endpoint.endswith("/openai/v1"):
+                endpoint = f"{endpoint}/openai/v1"
             client = OpenAI(
-                base_url=f"{endpoint}/openai/v1/",
+                base_url=f"{endpoint}/",
                 api_key=os.environ["AZURE_OPENAI_API_KEY"],
             )
         if not deployment:
