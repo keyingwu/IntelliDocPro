@@ -1,20 +1,89 @@
 .pdf-preview {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 14px;
-  overflow-x: hidden;
-  overflow-y: auto;
   width: 100%;
   min-width: 0;
   height: 100%;
-  padding: 18px;
   background: var(--card-2);
   border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.pdf-preview-image {
+  align-items: center;
+  overflow: auto;
+  padding: 18px;
+}
+
+.pdf-toolbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(44, 42, 40, 0.1);
+}
+
+.pdf-toolbar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.pdf-toolbar button:hover:not(:disabled) {
+  background: rgba(44, 42, 40, 0.08);
+}
+
+.pdf-toolbar button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.pdf-toolbar-pages {
+  min-width: 48px;
+  text-align: center;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pdf-toolbar-zoom {
+  width: auto !important;
+  padding: 0 6px !important;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pdf-toolbar-sep {
+  width: 1px;
+  height: 16px;
+  margin: 0 4px;
+  background: rgba(44, 42, 40, 0.15);
+}
+
+.pdf-pages {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  overflow: auto;
+  padding: 18px;
 }
 
 .pdf-page {
   position: relative;
+  margin-inline: auto;
   box-shadow: 0 2px 12px rgba(44, 42, 40, 0.14);
   border-radius: 4px;
   overflow: hidden;
@@ -32,18 +101,29 @@
 .textLayer {
   position: absolute;
   inset: 0;
-  overflow: hidden;
+  /* clip, not hidden: real-world PDFs have glyph spans overflowing the page
+   * box, which makes an overflow:hidden layer silently scrollable — any
+   * scrollIntoView then drags the text layer out of sync with the canvas. */
+  overflow: clip;
   line-height: 1;
   text-size-adjust: none;
   forced-color-adjust: none;
 }
 
-.textLayer span {
+.textLayer :is(span, br) {
   color: transparent;
   position: absolute;
   white-space: pre;
   cursor: text;
   transform-origin: 0 0;
+}
+
+/* Tagged PDFs wrap text runs in markedContent spans; without this rule the
+ * inner spans' percentage positions resolve against the wrapper instead of
+ * the page and every span drifts (pdf.js text_layer_builder.css). */
+.textLayer span.markedContent {
+  top: 0;
+  height: 0;
 }
 
 .textLayer span.hl {
