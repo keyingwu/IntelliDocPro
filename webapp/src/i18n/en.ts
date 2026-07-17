@@ -103,7 +103,7 @@ export const en = {
   'results.status.ready': 'Ready',
   'results.status.review': 'Review',
   'results.status.failed': 'Failed',
-  'results.viewOriginal': 'View original',
+  'results.viewOriginal': 'Open uploaded file',
   'results.docUnavailable': 'Original document is not available.',
   'results.drawer.raw': 'Raw text',
   'results.drawer.source': 'Source',
