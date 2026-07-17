@@ -553,6 +553,12 @@ export default function BuildWizard() {
       setModel(existing.data.model ?? '')
       dispatchRefine({ type: 'hydrate', fields: existing.data.schema.fields })
       lockKeys(existing.data.schema.fields)
+      if (existing.data.sample_document_id) {
+        api
+          .fetchDocument(existing.data.sample_document_id)
+          .then((file) => setSampleFile((prev) => prev ?? file))
+          .catch(() => {}) // preview stays empty; the user can re-upload
+      }
     }
   }, [existing.data])
 
@@ -565,6 +571,8 @@ export default function BuildWizard() {
         model: model || null,
         schema,
       })
+      // best-effort: a failed sample upload must not break assistant creation
+      await api.uploadSample(assistant.id, file).catch(() => {})
       return assistant
     },
     onSuccess: (assistant) => {
@@ -921,7 +929,10 @@ export default function BuildWizard() {
                   title={t('fields.sample.title')}
                   body={t('fields.sample.body')}
                   buttonLabel={t('fields.sample.button')}
-                  onFiles={(files) => handleSampleFile(files[0])}
+                  onFiles={(files) => {
+                    handleSampleFile(files[0])
+                    if (assistantId) api.uploadSample(assistantId, files[0]).catch(() => {})
+                  }}
                 />
               </div>
             )}

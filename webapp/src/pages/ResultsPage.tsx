@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft, Download, FilePlus2, Settings2, X } from 'lucide-react'
+import { ArrowLeft, Download, ExternalLink, FilePlus2, Settings2, X } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api/client'
@@ -38,6 +38,17 @@ function Drawer({
         <div>
           <div className="drawer-title">{row.filename}</div>
           <StatusPill row={row} />
+          {row.document_id && (
+            <a
+              className="doc-link"
+              href={api.documentUrl(row.document_id)}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <ExternalLink size={13} />
+              {t('results.viewOriginal')}
+            </a>
+          )}
         </div>
         <button className="btn-icon visible" onClick={onClose}>
           <X size={17} />

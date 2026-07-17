@@ -93,3 +93,46 @@ def test_delete_cascades():
     store.save_run(a["id"], _report())
     store.delete_assistant(a["id"])
     assert store.list_results(a["id"]) == []
+
+
+def test_document_roundtrip():
+    doc = store.save_document("a.pdf", b"%PDF-1.4 x", "application/pdf")
+    meta, data = store.get_document(doc["id"])
+    assert data == b"%PDF-1.4 x"
+    assert meta["filename"] == "a.pdf"
+    assert meta["content_type"] == "application/pdf"
+    assert meta["size_bytes"] == len(b"%PDF-1.4 x")
+    assert store.get_document("nope") is None
+
+
+def test_save_run_links_documents():
+    a = _make_assistant()
+    doc = store.save_document("a.pdf", b"x")
+    store.save_run(a["id"], _report(), document_ids=[doc["id"]])
+    rows = store.list_results(a["id"])
+    assert rows[0]["document_id"] == doc["id"]
+
+
+def test_replacing_sample_deletes_old_document():
+    a = _make_assistant()
+    first = store.save_document("one.pdf", b"1")
+    updated = store.set_sample_document(a["id"], first["id"])
+    assert updated["sample_document_id"] == first["id"]
+
+    second = store.save_document("two.pdf", b"2")
+    store.set_sample_document(a["id"], second["id"])
+    assert store.get_document(first["id"]) is None
+    assert store.get_document(second["id"]) is not None
+    assert store.set_sample_document("nope", second["id"]) is None
+
+
+def test_delete_assistant_removes_documents():
+    a = _make_assistant()
+    run_doc = store.save_document("a.pdf", b"run bytes")
+    store.save_run(a["id"], _report(), document_ids=[run_doc["id"]])
+    sample = store.save_document("sample.pdf", b"sample bytes")
+    store.set_sample_document(a["id"], sample["id"])
+
+    assert store.delete_assistant(a["id"])
+    assert store.get_document(run_doc["id"]) is None
+    assert store.get_document(sample["id"]) is None

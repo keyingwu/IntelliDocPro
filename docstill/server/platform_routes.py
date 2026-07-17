@@ -6,7 +6,7 @@ import threading
 import uuid
 
 from fastapi import APIRouter, File, Form, UploadFile
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 import docstill
@@ -95,6 +95,40 @@ def delete_assistant(assistant_id: str):
         return _not_found(assistant_id)
 
 
+def _safe_filename(name: str) -> str:
+    return "".join(c if c.isalnum() or c in "-_. " else "_" for c in name)
+
+
+@router.get("/documents/{document_id}")
+def get_document(document_id: str):
+    """Serve a stored upload. The single download point for original files;
+    tenant authorization lands here when multi-tenancy arrives."""
+    found = store.get_document(document_id)
+    if found is None:
+        return JSONResponse(
+            status_code=404,
+            content={"error": "DocumentNotFound", "detail": document_id},
+        )
+    meta, data = found
+    return Response(
+        content=data,
+        media_type=meta["content_type"] or "application/octet-stream",
+        headers={
+            "Content-Disposition": f'inline; filename="{_safe_filename(meta["filename"])}"'
+        },
+    )
+
+
+@router.put("/assistants/{assistant_id}/sample")
+async def set_sample(assistant_id: str, file: UploadFile = File(...)):
+    """Attach (or replace) the assistant's sample document."""
+    if store.get_assistant(assistant_id) is None:
+        return _not_found(assistant_id)
+    data = await file.read()
+    doc = store.save_document(file.filename or "document", data, file.content_type)
+    return store.set_sample_document(assistant_id, doc["id"])
+
+
 @router.post("/assistants/{assistant_id}/bulk", status_code=202)
 async def assistant_bulk(assistant_id: str, files: list[UploadFile] = File(...)):
     """Run a bulk extraction with the assistant's stored schema/engine/model.
@@ -104,7 +138,12 @@ async def assistant_bulk(assistant_id: str, files: list[UploadFile] = File(...))
         return _not_found(assistant_id)
     docstill.get_engine(assistant["engine"], model=assistant["model"])  # config errors now
 
-    documents = [(f.filename or "document", await f.read()) for f in files]
+    documents, document_ids = [], []
+    for f in files:
+        name = f.filename or "document"
+        data = await f.read()
+        documents.append((name, data))
+        document_ids.append(store.save_document(name, data, f.content_type)["id"])
     job_id = uuid.uuid4().hex[:12]
     jobs.publish(
         job_id,
@@ -124,7 +163,7 @@ async def assistant_bulk(assistant_id: str, files: list[UploadFile] = File(...))
             model=assistant["model"],
             on_update=lambda snap: jobs.publish(job_id, snap),
         )
-        store.save_run(assistant_id, report)
+        store.save_run(assistant_id, report, document_ids=document_ids)
 
     threading.Thread(target=run, daemon=True).start()
     return {"job_id": job_id, "total": len(documents)}

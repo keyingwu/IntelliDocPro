@@ -64,6 +64,7 @@ export interface Assistant {
   engine: string
   model: string | null
   schema: ExtractionSchema
+  sample_document_id: string | null
   created_at: string
   updated_at: string
   doc_count: number
@@ -109,6 +110,7 @@ export interface ResultRow {
   id: string
   run_id: string
   assistant_id: string
+  document_id: string | null
   filename: string
   status: 'done' | 'failed'
   needs_review: boolean | null

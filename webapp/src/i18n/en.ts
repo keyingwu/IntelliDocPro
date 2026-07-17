@@ -103,6 +103,7 @@ export const en = {
   'results.status.ready': 'Ready',
   'results.status.review': 'Review',
   'results.status.failed': 'Failed',
+  'results.viewOriginal': 'View original',
   'results.drawer.raw': 'Raw text',
   'results.drawer.source': 'Source',
   'results.drawer.confidence': 'Confidence',

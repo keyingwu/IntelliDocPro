@@ -1,4 +1,5 @@
-"""SQLite persistence for the platform layer: assistants, runs, results.
+"""SQLite persistence for the platform layer: assistants, runs, results, and
+uploaded documents (metadata in SQLite, bytes as blobs beside the database).
 
 Uses stdlib sqlite3 with WAL. One short-lived connection per operation keeps
 things thread-safe (the bulk worker thread writes from outside the request
@@ -6,6 +7,7 @@ cycle). DOCSTILL_DB overrides the database location (tests point it at a tmp
 file).
 """
 
+import hashlib
 import json
 import os
 import sqlite3
@@ -25,8 +27,17 @@ CREATE TABLE IF NOT EXISTS assistants (
   engine TEXT NOT NULL,
   model TEXT,
   schema_json TEXT NOT NULL,
+  sample_document_id TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS documents (
+  id TEXT PRIMARY KEY,
+  filename TEXT NOT NULL,
+  content_type TEXT,
+  size_bytes INTEGER NOT NULL,
+  sha256 TEXT NOT NULL,
+  created_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS runs (
   id TEXT PRIMARY KEY,
@@ -43,6 +54,7 @@ CREATE TABLE IF NOT EXISTS results (
   id TEXT PRIMARY KEY,
   run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
   assistant_id TEXT NOT NULL REFERENCES assistants(id) ON DELETE CASCADE,
+  document_id TEXT,
   filename TEXT NOT NULL,
   status TEXT NOT NULL,
   needs_review INTEGER,
@@ -72,6 +84,15 @@ def _connect() -> sqlite3.Connection:
     key = str(path)
     if key not in _initialized_paths:
         conn.executescript(_SCHEMA_SQL)
+        # migrate databases created before document persistence
+        for stmt in (
+            "ALTER TABLE assistants ADD COLUMN sample_document_id TEXT",
+            "ALTER TABLE results ADD COLUMN document_id TEXT",
+        ):
+            try:
+                conn.execute(stmt)
+            except sqlite3.OperationalError:
+                pass  # column already exists
         _initialized_paths.add(key)
     return conn
 
@@ -82,6 +103,56 @@ def _now() -> str:
 
 def _new_id() -> str:
     return uuid.uuid4().hex[:12]
+
+
+# ---- documents ----
+# Uploaded files live as blobs next to the database; callers only ever see
+# document ids. Lifecycle is owned entirely by this module: deleting an
+# assistant (or replacing its sample) removes the rows and the blobs.
+
+def _blob_path(document_id: str) -> Path:
+    return db_path().parent / "blobs" / document_id[:2] / document_id
+
+
+def save_document(filename: str, data: bytes, content_type: str | None = None) -> dict:
+    doc_id = _new_id()
+    path = _blob_path(doc_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+    now = _now()
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO documents (id, filename, content_type, size_bytes, sha256,"
+            " created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (doc_id, filename, content_type, len(data),
+             hashlib.sha256(data).hexdigest(), now),
+        )
+    return {
+        "id": doc_id, "filename": filename, "content_type": content_type,
+        "size_bytes": len(data), "created_at": now,
+    }
+
+
+def get_document(document_id: str) -> tuple[dict, bytes] | None:
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM documents WHERE id = ?", (document_id,)
+        ).fetchone()
+    if row is None:
+        return None
+    try:
+        data = _blob_path(document_id).read_bytes()
+    except FileNotFoundError:
+        return None
+    return dict(row), data
+
+
+def _delete_documents(conn: sqlite3.Connection, document_ids: list[str]) -> None:
+    conn.executemany(
+        "DELETE FROM documents WHERE id = ?", [(d,) for d in document_ids]
+    )
+    for doc_id in document_ids:
+        _blob_path(doc_id).unlink(missing_ok=True)
 
 
 # ---- assistants ----
@@ -171,15 +242,54 @@ def update_assistant(assistant_id: str, **fields) -> dict | None:
     return get_assistant(assistant_id)
 
 
+def set_sample_document(assistant_id: str, document_id: str) -> dict | None:
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT sample_document_id FROM assistants WHERE id = ?", (assistant_id,)
+        ).fetchone()
+        if row is None:
+            return None
+        old = row["sample_document_id"]
+        conn.execute(
+            "UPDATE assistants SET sample_document_id = ?, updated_at = ? WHERE id = ?",
+            (document_id, _now(), assistant_id),
+        )
+        if old and old != document_id:
+            _delete_documents(conn, [old])
+    return get_assistant(assistant_id)
+
+
 def delete_assistant(assistant_id: str) -> bool:
     with _connect() as conn:
+        doc_ids = [
+            r["document_id"]
+            for r in conn.execute(
+                "SELECT DISTINCT document_id FROM results"
+                " WHERE assistant_id = ? AND document_id IS NOT NULL",
+                (assistant_id,),
+            ).fetchall()
+        ]
+        sample = conn.execute(
+            "SELECT sample_document_id FROM assistants WHERE id = ?", (assistant_id,)
+        ).fetchone()
+        if sample and sample["sample_document_id"]:
+            doc_ids.append(sample["sample_document_id"])
         cur = conn.execute("DELETE FROM assistants WHERE id = ?", (assistant_id,))
-        return cur.rowcount > 0
+        if cur.rowcount == 0:
+            return False
+        _delete_documents(conn, doc_ids)
+        return True
 
 
 # ---- runs and results ----
 
-def save_run(assistant_id: str, report: BulkReport) -> str:
+def save_run(
+    assistant_id: str,
+    report: BulkReport,
+    document_ids: list[str | None] | None = None,
+) -> str:
+    """document_ids aligns with report.entries by index (bulk_extract preserves
+    input order); None entries or a missing list leave results unlinked."""
     run_id = _new_id()
     now = _now()
     with _connect() as conn:
@@ -191,18 +301,22 @@ def save_run(assistant_id: str, report: BulkReport) -> str:
                 report.completed, report.failed, report.total_cost_usd, now,
             ),
         )
-        for entry in report.entries:
+        for i, entry in enumerate(report.entries):
             values_json = (
                 json.dumps([v.model_dump() for v in entry.result.values])
                 if entry.result is not None
                 else None
             )
+            document_id = (
+                document_ids[i] if document_ids and i < len(document_ids) else None
+            )
             conn.execute(
-                "INSERT INTO results (id, run_id, assistant_id, filename, status,"
-                " needs_review, error, duration_s, cost_usd, values_json, created_at)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO results (id, run_id, assistant_id, document_id, filename,"
+                " status, needs_review, error, duration_s, cost_usd, values_json,"
+                " created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
-                    _new_id(), run_id, assistant_id, entry.filename, entry.status,
+                    _new_id(), run_id, assistant_id, document_id, entry.filename,
+                    entry.status,
                     None if entry.needs_review is None else int(entry.needs_review),
                     entry.error, entry.duration_s,
                     entry.cost.total_cost if entry.cost else None,

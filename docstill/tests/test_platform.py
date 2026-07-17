@@ -167,3 +167,53 @@ def test_export_xlsx(client, fake_bulk):
 
 def test_export_unknown_assistant_404(client):
     assert client.get("/assistants/nope/export.xlsx").status_code == 404
+
+
+def test_bulk_persists_documents(client, fake_bulk):
+    a = _create(client)
+    client.post(
+        f"/assistants/{a['id']}/bulk",
+        files=[("files", ("a.pdf", PDF, "application/pdf"))],
+    )
+    rows = _wait_results(client, a["id"], 1)
+    doc_id = rows[0]["document_id"]
+    assert doc_id
+
+    resp = client.get(f"/documents/{doc_id}")
+    assert resp.status_code == 200
+    assert resp.content == PDF
+    assert resp.headers["content-type"].startswith("application/pdf")
+    assert 'filename="a.pdf"' in resp.headers["content-disposition"]
+
+
+def test_document_unknown_404(client):
+    assert client.get("/documents/nope").status_code == 404
+
+
+def test_sample_upload_replace_and_cascade(client):
+    a = _create(client)
+    resp = client.put(
+        f"/assistants/{a['id']}/sample",
+        files={"file": ("sample.pdf", PDF, "application/pdf")},
+    )
+    assert resp.status_code == 200
+    first = resp.json()["sample_document_id"]
+    assert client.get(f"/documents/{first}").content == PDF
+
+    resp = client.put(
+        f"/assistants/{a['id']}/sample",
+        files={"file": ("sample2.pdf", b"%PDF-2", "application/pdf")},
+    )
+    second = resp.json()["sample_document_id"]
+    assert second != first
+    assert client.get(f"/documents/{first}").status_code == 404
+
+    client.delete(f"/assistants/{a['id']}")
+    assert client.get(f"/documents/{second}").status_code == 404
+
+
+def test_sample_unknown_assistant_404(client):
+    resp = client.put(
+        "/assistants/nope/sample", files={"file": ("s.pdf", PDF, "application/pdf")}
+    )
+    assert resp.status_code == 404

@@ -104,4 +104,21 @@ export const api = {
     request<ResultRow[]>(`/assistants/${assistantId}/results?filter=${filter}`),
 
   exportUrl: (assistantId: string) => `/assistants/${assistantId}/export.xlsx`,
+
+  uploadSample: (assistantId: string, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return request<Assistant>(`/assistants/${assistantId}/sample`, { method: 'PUT', body: form })
+  },
+  documentUrl: (documentId: string) => `/documents/${documentId}`,
+  /** Rebuild a File from a stored document so the wizard preview and AI
+   *  refinement work when an assistant is reopened later. */
+  fetchDocument: async (documentId: string): Promise<File> => {
+    const resp = await fetch(`/documents/${documentId}`)
+    if (!resp.ok) throw new ApiError(resp.status, resp.statusText)
+    const blob = await resp.blob()
+    const name =
+      resp.headers.get('content-disposition')?.match(/filename="([^"]+)"/)?.[1] ?? 'document'
+    return new File([blob], name, { type: blob.type })
+  },
 }
