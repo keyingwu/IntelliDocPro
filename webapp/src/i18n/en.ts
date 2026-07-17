@@ -104,6 +104,7 @@ export const en = {
   'results.status.review': 'Review',
   'results.status.failed': 'Failed',
   'results.viewOriginal': 'View original',
+  'results.docUnavailable': 'Original document is not available.',
   'results.drawer.raw': 'Raw text',
   'results.drawer.source': 'Source',
   'results.drawer.confidence': 'Confidence',

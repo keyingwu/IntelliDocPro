@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft, Download, ExternalLink, FilePlus2, Settings2, X } from 'lucide-react'
+import { ArrowLeft, Download, ExternalLink, FilePlus2, Loader2, Settings2, X } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api/client'
 import type { FieldSpec, FieldValue, ResultRow } from '../api/types'
+import PdfPreview, { type Highlight } from '../components/PdfPreview'
 import { t } from '../i18n'
 import './results.css'
 
@@ -32,8 +33,90 @@ function Drawer({
   fieldByKey: Map<string, FieldSpec>
   onClose: () => void
 }) {
+  const [highlight, setHighlight] = useState<Highlight | null>(null)
+  const [fallbackNote, setFallbackNote] = useState<string | null>(null)
+
+  const document = useQuery({
+    queryKey: ['document', row.document_id],
+    queryFn: () => api.fetchDocument(row.document_id!),
+    enabled: row.document_id !== null,
+    staleTime: Infinity,
+  })
+  const withPreview = row.document_id !== null
+
+  const hoverValue = (v: FieldValue, hovering: boolean) => {
+    if (!withPreview) return
+    if (!hovering) {
+      setHighlight(null)
+      setFallbackNote(null)
+      return
+    }
+    setHighlight({
+      page: v.source?.page,
+      rawText: v.raw_text,
+      location: v.source?.location,
+    })
+    if (v.source?.location) {
+      setFallbackNote(
+        t('fields.source.fallback', {
+          page: v.source?.page ?? 1,
+          location: v.source.location,
+        }),
+      )
+    }
+  }
+
+  const fields = (
+    <div className="drawer-fields">
+      {row.values.map((v: FieldValue) => {
+        const spec = fieldByKey.get(v.field)
+        return (
+        <div
+          key={v.field}
+          className={`drawer-field${v.needs_review ? ' flagged' : ''}`}
+          onMouseEnter={() => hoverValue(v, true)}
+          onMouseLeave={() => hoverValue(v, false)}
+        >
+          <div className="drawer-field-name">
+            {spec?.name ?? v.field}
+            <code className="drawer-field-key">{spec?.key ?? v.field}</code>
+          </div>
+          {spec?.description && <div className="drawer-field-desc">{spec.description}</div>}
+          <div className="drawer-field-value">
+            {v.value ?? '—'}
+            {v.currency ? ` ${v.currency}` : ''}
+          </div>
+          <dl className="drawer-meta">
+            {v.raw_text && (
+              <>
+                <dt>{t('results.drawer.raw')}</dt>
+                <dd>“{v.raw_text}”</dd>
+              </>
+            )}
+            {v.source && (v.source.page || v.source.location) && (
+              <>
+                <dt>{t('results.drawer.source')}</dt>
+                <dd>
+                  {v.source.page ? t('results.drawer.page', { page: v.source.page }) : ''}
+                  {v.source.page && v.source.location ? ' · ' : ''}
+                  {v.source.location ?? ''}
+                </dd>
+              </>
+            )}
+            <dt>{t('results.drawer.confidence')}</dt>
+            <dd>
+              <span className="conf-dot" style={{ background: CONF_COLOR[v.confidence] }} />{' '}
+              {v.confidence}
+            </dd>
+          </dl>
+        </div>
+        )
+      })}
+    </div>
+  )
+
   return (
-    <aside className="drawer card">
+    <aside className={`drawer card${withPreview ? ' review' : ''}`}>
       <div className="drawer-head">
         <div>
           <div className="drawer-title">{row.filename}</div>
@@ -55,47 +138,27 @@ function Drawer({
         </button>
       </div>
       {row.error && <div className="error-note">{row.error}</div>}
-      <div className="drawer-fields">
-        {row.values.map((v: FieldValue) => {
-          const spec = fieldByKey.get(v.field)
-          return (
-          <div key={v.field} className={`drawer-field${v.needs_review ? ' flagged' : ''}`}>
-            <div className="drawer-field-name">
-              {spec?.name ?? v.field}
-              <code className="drawer-field-key">{spec?.key ?? v.field}</code>
-            </div>
-            {spec?.description && <div className="drawer-field-desc">{spec.description}</div>}
-            <div className="drawer-field-value">
-              {v.value ?? '—'}
-              {v.currency ? ` ${v.currency}` : ''}
-            </div>
-            <dl className="drawer-meta">
-              {v.raw_text && (
-                <>
-                  <dt>{t('results.drawer.raw')}</dt>
-                  <dd>“{v.raw_text}”</dd>
-                </>
-              )}
-              {v.source && (v.source.page || v.source.location) && (
-                <>
-                  <dt>{t('results.drawer.source')}</dt>
-                  <dd>
-                    {v.source.page ? t('results.drawer.page', { page: v.source.page }) : ''}
-                    {v.source.page && v.source.location ? ' · ' : ''}
-                    {v.source.location ?? ''}
-                  </dd>
-                </>
-              )}
-              <dt>{t('results.drawer.confidence')}</dt>
-              <dd>
-                <span className="conf-dot" style={{ background: CONF_COLOR[v.confidence] }} />{' '}
-                {v.confidence}
-              </dd>
-            </dl>
+      {withPreview ? (
+        <div className="review-body">
+          <div className="review-pdf">
+            {fallbackNote && <div className="review-banner">{fallbackNote}</div>}
+            {document.data ? (
+              <PdfPreview file={document.data} highlight={highlight} />
+            ) : (
+              <div className="review-doc-loading muted">
+                {document.isError ? t('results.docUnavailable') : (
+                  <>
+                    <Loader2 size={16} className="spin" /> {t('common.loading')}
+                  </>
+                )}
+              </div>
+            )}
           </div>
-          )
-        })}
-      </div>
+          <div className="review-fields">{fields}</div>
+        </div>
+      ) : (
+        fields
+      )}
     </aside>
   )
 }
