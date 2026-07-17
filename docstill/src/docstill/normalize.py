@@ -73,7 +73,7 @@ def _normalize_one(spec: FieldSpec, out: LLMFieldOut) -> FieldValue:
 
     needs_review = value is None or out.confidence == "low" or parse_failed
     return FieldValue(
-        field=spec.name,
+        field=spec.key,
         value=value,
         raw_text=out.raw_text,
         currency=out.currency if spec.type == FieldType.AMOUNT else None,
@@ -92,14 +92,16 @@ def assemble_result(
     usage: dict,
 ) -> ExtractionResult:
     """Map LLM output onto the schema: one FieldValue per schema field, in
-    schema order. Fields the model did not return come back as missing."""
-    by_name = {f.field: f for f in llm_out.fields}
+    schema order. The model is asked to echo the field key, but a match on the
+    display name is accepted as fallback. Fields the model did not return come
+    back as missing."""
+    by_field = {f.field: f for f in llm_out.fields}
     values = []
     for spec in schema.fields:
-        out = by_name.get(spec.name)
+        out = by_field.get(spec.key) or by_field.get(spec.name)
         if out is None:
             values.append(
-                FieldValue(field=spec.name, value=None, confidence="low", needs_review=True)
+                FieldValue(field=spec.key, value=None, confidence="low", needs_review=True)
             )
         else:
             values.append(_normalize_one(spec, out))

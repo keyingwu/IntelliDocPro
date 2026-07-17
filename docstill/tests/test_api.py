@@ -26,7 +26,7 @@ def fake_openai(monkeypatch):
 
 def test_extract_with_bytes_and_dict_schema(fake_openai):
     result = docstill.extract(PDF, {"fields": [{"name": "Lieferant"}]})
-    assert result.values[0].field == "Lieferant"
+    assert result.values[0].field == "lieferant"
     assert result.values[0].value == "Meridian GmbH"
     assert result.engine == "openai"
     assert result.model == "gpt-5.6-luna"

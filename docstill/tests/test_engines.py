@@ -45,6 +45,7 @@ SUGGESTED = LLMSuggestedSchema(
     fields=[
         LLMSuggestedField(
             name="Lieferant",
+            key="supplier",
             source_label="Lieferant",
             type=FieldType.TEXT,
             description="top",
@@ -52,6 +53,7 @@ SUGGESTED = LLMSuggestedSchema(
         ),
         LLMSuggestedField(
             name="Rating",
+            key="rating",
             source_label=None,
             type=FieldType.ENUM,
             description=None,
@@ -59,6 +61,7 @@ SUGGESTED = LLMSuggestedSchema(
         ),
         LLMSuggestedField(
             name="Lieferant",
+            key="supplier_2",
             source_label="Lieferant",
             type=FieldType.TEXT,
             description="dupe",
@@ -74,6 +77,7 @@ REFINEMENT_PLAN = LLMRefinementPlan(
             target_name=None,
             field=LLMRefinedField(
                 name="Zahlungsziel",
+                key=None,
                 type=FieldType.TEXT,
                 description="payment term",
                 enum_values=None,
@@ -150,6 +154,7 @@ def test_suggest_schema_prefers_verbatim_source_label_over_semantic_name():
         fields=[
             LLMSuggestedField(
                 name="Steuerbetrag",
+                key="",
                 source_label="Gesamt Steuerbetrag",
                 type=FieldType.AMOUNT,
                 description="Normalized meaning belongs here",
@@ -167,6 +172,7 @@ def test_suggest_schema_uses_semantic_name_for_symbol_only_source_label():
         fields=[
             LLMSuggestedField(
                 name="Steuersatz",
+                key="",
                 source_label="%",
                 type=FieldType.PERCENT,
                 description="Prozentsatz aus der Spalte %",
@@ -184,6 +190,7 @@ def test_suggest_schema_removes_only_trailing_label_colon():
         fields=[
             LLMSuggestedField(
                 name="Telefonnummer",
+                key="",
                 source_label="Tel. Nr.:",
                 type=FieldType.TEXT,
                 description=None,

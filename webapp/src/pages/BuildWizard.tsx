@@ -29,6 +29,7 @@ import type {
 import PdfPreview, { type Highlight } from '../components/PdfPreview'
 import UploadDropzone from '../components/UploadDropzone'
 import { t } from '../i18n'
+import { FIELD_KEY_RE, fieldKeyFromName } from '../lib/fieldKey'
 import {
   initialSchemaRefineState,
   sampleFileKey,
@@ -113,12 +114,15 @@ function EngineModelPicker({
 function FieldRow({
   field,
   extracted,
+  keyLocked,
   onChange,
   onRemove,
   onHover,
 }: {
   field: FieldSpec
   extracted: FieldValue | undefined
+  /** Persisted keys must survive display renames: results and exports key on them. */
+  keyLocked: boolean
   onChange: (next: FieldSpec) => void
   onRemove: () => void
   onHover: (hovering: boolean) => void
@@ -157,33 +161,54 @@ function FieldRow({
           className="input field-name"
           value={field.name}
           placeholder={t('fields.name.placeholder')}
-          onChange={(e) => onChange({ ...field, name: e.target.value })}
+          onChange={(e) => {
+            const name = e.target.value
+            // The key follows the typed name only while the field is unsaved
+            // and the key has not been set to something else.
+            const follows = !keyLocked && field.key === fieldKeyFromName(field.name)
+            onChange({ ...field, name, key: follows ? fieldKeyFromName(name) : field.key })
+          }}
         />
         <button className="btn-icon danger visible" onClick={onRemove} title={t('common.delete')}>
           <Trash2 size={15} />
         </button>
       </div>
-      <input
-        className="input field-hint"
-        value={field.description ?? ''}
-        placeholder={t('fields.description.placeholder')}
-        onChange={(e) => onChange({ ...field, description: e.target.value || null })}
-      />
-      {field.type === 'enum' && (
+      <label className="field-sub" title={t('fields.key.label')}>
+        <span className="field-sub-label">{t('fields.key.tag')}</span>
+        <input
+          className="input field-key"
+          value={field.key}
+          placeholder={t('fields.key.placeholder')}
+          onChange={(e) => onChange({ ...field, key: e.target.value.toLowerCase() })}
+        />
+      </label>
+      <label className="field-sub">
+        <span className="field-sub-label">{t('fields.description.tag')}</span>
         <input
           className="input field-hint"
-          value={(field.enum_values ?? []).join(', ')}
-          placeholder={t('fields.enum.placeholder')}
-          onChange={(e) =>
-            onChange({
-              ...field,
-              enum_values: e.target.value
-                .split(',')
-                .map((s) => s.trim())
-                .filter(Boolean),
-            })
-          }
+          value={field.description ?? ''}
+          placeholder={t('fields.description.placeholder')}
+          onChange={(e) => onChange({ ...field, description: e.target.value || null })}
         />
+      </label>
+      {field.type === 'enum' && (
+        <label className="field-sub">
+          <span className="field-sub-label">{t('fields.enum.tag')}</span>
+          <input
+            className="input field-hint"
+            value={(field.enum_values ?? []).join(', ')}
+            placeholder={t('fields.enum.placeholder')}
+            onChange={(e) =>
+              onChange({
+                ...field,
+                enum_values: e.target.value
+                  .split(',')
+                  .map((s) => s.trim())
+                  .filter(Boolean),
+              })
+            }
+          />
+        </label>
       )}
       {extracted && (
         <div className="field-extract">
@@ -511,6 +536,10 @@ export default function BuildWizard() {
   }
 
   // edit mode: hydrate from the stored assistant
+  const [persistedKeys, setPersistedKeys] = useState<Set<string>>(new Set())
+  const lockKeys = (locked: FieldSpec[]) =>
+    setPersistedKeys(new Set(locked.map((f) => f.key).filter(Boolean)))
+
   const existing = useQuery({
     queryKey: ['assistant', routeId],
     queryFn: () => api.getAssistant(routeId!),
@@ -523,6 +552,7 @@ export default function BuildWizard() {
       setEngine(existing.data.engine)
       setModel(existing.data.model ?? '')
       dispatchRefine({ type: 'hydrate', fields: existing.data.schema.fields })
+      lockKeys(existing.data.schema.fields)
     }
   }, [existing.data])
 
@@ -541,6 +571,7 @@ export default function BuildWizard() {
       setAssistantId(assistant.id)
       setName(assistant.name)
       dispatchRefine({ type: 'hydrate', fields: assistant.schema.fields })
+      lockKeys(assistant.schema.fields)
       setStep(2)
     },
   })
@@ -551,12 +582,13 @@ export default function BuildWizard() {
         name: name.trim() || t('wizard.title.new'),
         engine,
         model: model || null,
-        schema: { fields: [{ name: 'Field 1', type: 'text' }] },
+        schema: { fields: [{ name: 'Field 1', key: 'field_1', type: 'text' }] },
       }),
     onSuccess: (assistant) => {
       setAssistantId(assistant.id)
       setName(assistant.name)
       dispatchRefine({ type: 'hydrate', fields: assistant.schema.fields })
+      lockKeys(assistant.schema.fields)
       setStep(2)
     },
   })
@@ -571,11 +603,15 @@ export default function BuildWizard() {
 
   const saveSchema = useMutation({
     mutationFn: updateAssistant,
+    onSuccess: () => lockKeys(fields),
   })
 
   const saveAndContinue = useMutation({
     mutationFn: updateAssistant,
-    onSuccess: () => setStep(3),
+    onSuccess: () => {
+      lockKeys(fields)
+      setStep(3)
+    },
   })
 
   const refine = useMutation({
@@ -656,7 +692,7 @@ export default function BuildWizard() {
       setFallbackNote(null)
       return
     }
-    const extracted = extractedByField.get(field.name)
+    const extracted = extractedByField.get(field.key) ?? extractedByField.get(field.name)
     if (!extracted) return
     setHighlight({
       page: extracted.source?.page,
@@ -676,8 +712,10 @@ export default function BuildWizard() {
   const fieldsValid =
     fields.length > 0 &&
     fields.every((f) => f.name.trim().length > 0) &&
+    fields.every((f) => FIELD_KEY_RE.test(f.key)) &&
     fields.every((f) => f.type !== 'enum' || (f.enum_values?.length ?? 0) > 0) &&
-    new Set(fields.map((f) => f.name.trim())).size === fields.length
+    new Set(fields.map((f) => f.name.trim())).size === fields.length &&
+    new Set(fields.map((f) => f.key)).size === fields.length
 
   const steps = [t('wizard.step.sample'), t('wizard.step.fields'), t('wizard.step.bulk')]
 
@@ -789,10 +827,13 @@ export default function BuildWizard() {
               onAddManually={(request) => {
                 const requestedName = request.trim()
                 const nameAvailable = !fields.some((field) => field.name === requestedName)
+                const name = nameAvailable && requestedName.length <= 80 ? requestedName : ''
+                const derived = fieldKeyFromName(name)
                 applyManualFields([
                   ...fields,
                   {
-                    name: nameAvailable && requestedName.length <= 80 ? requestedName : '',
+                    name,
+                    key: fields.some((field) => field.key === derived) ? '' : derived,
                     type: 'text',
                   },
                 ])
@@ -803,7 +844,8 @@ export default function BuildWizard() {
                 <FieldRow
                   key={i}
                   field={field}
-                  extracted={extractedByField.get(field.name)}
+                  extracted={extractedByField.get(field.key) ?? extractedByField.get(field.name)}
+                  keyLocked={persistedKeys.has(field.key)}
                   onChange={(next) =>
                     applyManualFields(fields.map((f, j) => (j === i ? next : f)))
                   }
@@ -814,7 +856,7 @@ export default function BuildWizard() {
             </div>
             <button
               className="btn btn-ghost add-field"
-              onClick={() => applyManualFields([...fields, { name: '', type: 'text' }])}
+              onClick={() => applyManualFields([...fields, { name: '', key: '', type: 'text' }])}
             >
               <Plus size={15} />
               {t('fields.add')}

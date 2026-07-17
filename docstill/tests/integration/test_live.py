@@ -50,13 +50,13 @@ def test_extract_invoice(engine):
 
     by_field = {v.field: v for v in result.values}
     assert len(result.values) == len(SCHEMA["fields"])
-    assert by_field["Lieferant"].value == "Meridian Supplies GmbH"
-    assert by_field["Rechnungsnummer"].value == "RE-2026-04821"
-    assert by_field["Rechnungsdatum"].value == "2026-06-12"
-    assert by_field["Nettobetrag"].value == 8450.0
-    assert by_field["Nettobetrag"].currency == "EUR"
-    assert by_field["MwSt-Satz"].value == 19.0
-    assert by_field["Gesamtbetrag"].value == 10055.5
+    assert by_field["lieferant"].value == "Meridian Supplies GmbH"
+    assert by_field["rechnungsnummer"].value == "RE-2026-04821"
+    assert by_field["rechnungsdatum"].value == "2026-06-12"
+    assert by_field["nettobetrag"].value == 8450.0
+    assert by_field["nettobetrag"].currency == "EUR"
+    assert by_field["mwst_satz"].value == 19.0
+    assert by_field["gesamtbetrag"].value == 10055.5
     assert result.usage.get("input_tokens", 0) > 0
 
 

@@ -60,7 +60,7 @@ def test_assemble_full_result():
     )
     result = assemble_result(SCHEMA, llm, engine="claude", model="m", usage={"input_tokens": 1})
 
-    assert [v.field for v in result.values] == [f.name for f in SCHEMA.fields]
+    assert [v.field for v in result.values] == [f.key for f in SCHEMA.fields]
     lieferant, betrag, mwst, datum, rating = result.values
 
     assert lieferant.value == "Meridian Supplies GmbH"

@@ -15,11 +15,13 @@ def refined_field(
     name: str,
     field_type: FieldType = FieldType.TEXT,
     *,
+    key: str | None = None,
     enum_values: list[str] | None = None,
     required: bool = False,
 ) -> LLMRefinedField:
     return LLMRefinedField(
         name=name,
+        key=key,
         type=field_type,
         description=None,
         enum_values=enum_values,

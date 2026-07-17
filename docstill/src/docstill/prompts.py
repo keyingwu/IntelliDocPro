@@ -29,6 +29,7 @@ class LLMExtractionOut(BaseModel):
 
 class LLMSuggestedField(BaseModel):
     name: str
+    key: str
     source_label: str | None
     type: FieldType
     description: str | None
@@ -41,6 +42,7 @@ class LLMSuggestedSchema(BaseModel):
 
 class LLMRefinedField(BaseModel):
     name: str
+    key: str | None
     type: FieldType
     description: str | None
     enum_values: list[str] | None
@@ -94,14 +96,15 @@ Rules:
 - `source_location` is a short description of where on the page it was found,
   in the language of the document (e.g. "Kopfzeile", "Summenblock", "table row 3").
 - Return one entry per requested field, in the same order as requested,
-  with `field` set to the exact requested field name.
+  with `field` set to the exact requested field key (the snake_case
+  identifier), never the printed label.
 """
 
 
 def field_lines(schema: ExtractionSchema) -> str:
     lines = []
     for i, f in enumerate(schema.fields, 1):
-        parts = [f"{i}. {f.name} (type: {f.type.value})"]
+        parts = [f'{i}. {f.key} (label: "{f.name}", type: {f.type.value})']
         if f.description:
             parts.append(f"hint: {f.description}")
         parts.append(_TYPE_RULES[f.type])
@@ -121,6 +124,11 @@ def extraction_user_prompt(schema: ExtractionSchema) -> str:
 
 
 _SCHEMA_RULES = """\
+- `key` is the field's stable machine identifier: concise English snake_case
+  (lowercase letters, digits, underscores; starts with a letter), derived from
+  the field's meaning, e.g. `invoice_number`, `equity_yield_percentage`. Keys
+  must be unique across the schema and are independent of the document's
+  language and of `name`.
 - For fields proposed from the document, copy the exact printed field label
   into `name` whenever one exists. Preserve its original wording,
   capitalization, punctuation, abbreviations, and spacing. Do not translate,
@@ -205,6 +213,9 @@ Rules:
   named `Fracht Versandort - Empfangsort`, `Road tax`, and `Fuel Surcharge`, a
   request for those three separate costs should produce three add operations.
 - Preserve field order conceptually: additions append; updates keep position.
+- For add operations set the new field's `key` (see the key rule below); it
+  may be null to have one derived from the name. For update and delete
+  operations `key` is ignored: a field's key never changes once created.
 - `message` is a brief user-facing summary in the language of the latest user
   instruction. Mention both completed changes and rejected requests.
 {_SCHEMA_RULES}"""

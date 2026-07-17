@@ -5,6 +5,8 @@ export type Confidence = 'high' | 'medium' | 'low'
 
 export interface FieldSpec {
   name: string
+  /** Stable snake_case machine identifier; extraction results key on it. */
+  key: string
   type: FieldType
   description?: string | null
   enum_values?: string[] | null

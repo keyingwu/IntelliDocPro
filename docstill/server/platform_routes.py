@@ -146,12 +146,13 @@ def export_xlsx(assistant_id: str):
     if assistant is None:
         return _not_found(assistant_id)
     rows = store.list_results(assistant_id, filter="all")
-    field_names = [f["name"] for f in assistant["schema"]["fields"]]
+    fields = assistant["schema"]["fields"]
 
     wb = Workbook()
     ws = wb.active
     ws.title = "Results"
-    header = ["Filename", "Status", "Needs review", *field_names, "Cost USD", "Extracted at"]
+    header = ["Filename", "Status", "Needs review", *[f["name"] for f in fields],
+              "Cost USD", "Extracted at"]
     ws.append(header)
     for cell in ws[1]:
         cell.font = Font(bold=True)
@@ -159,17 +160,19 @@ def export_xlsx(assistant_id: str):
     review_fill = PatternFill(start_color="FCF6E7", end_color="FCF6E7", fill_type="solid")
     for row in rows:
         by_field = {v["field"]: v for v in row["values"]}
+        # results predating field keys stored the display name in `field`
+        cell_for = [by_field.get(f.get("key") or "") or by_field.get(f["name"], {}) for f in fields]
         cells = [
             row["filename"],
             row["status"],
             "yes" if row["needs_review"] else "no",
-            *[by_field.get(name, {}).get("value") for name in field_names],
+            *[v.get("value") for v in cell_for],
             row["cost_usd"],
             row["created_at"],
         ]
         ws.append(cells)
-        for offset, name in enumerate(field_names):
-            if by_field.get(name, {}).get("needs_review"):
+        for offset, v in enumerate(cell_for):
+            if v.get("needs_review"):
                 ws.cell(row=ws.max_row, column=4 + offset).fill = review_fill
 
     for column_cells in ws.columns:

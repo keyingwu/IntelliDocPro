@@ -88,7 +88,16 @@ def _new_id() -> str:
 
 def _assistant_row_to_dict(row: sqlite3.Row) -> dict:
     d = dict(row)
-    d["schema"] = json.loads(d.pop("schema_json"))
+    schema = json.loads(d.pop("schema_json"))
+    # Validation derives field keys missing from pre-key schemas, so every
+    # schema leaving the store is fully keyed without a DB migration.
+    try:
+        from docstill import ExtractionSchema
+
+        schema = ExtractionSchema.coerce(schema).model_dump(mode="json")
+    except Exception:
+        pass
+    d["schema"] = schema
     return d
 
 _STATS_SELECT = """

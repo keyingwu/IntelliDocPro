@@ -2,6 +2,7 @@
 
 from .prompts import LLMRefinedField, LLMRefinementOperation, LLMRefinementPlan
 from .schema import (
+    KEY_PATTERN,
     ExtractionSchema,
     FieldSpec,
     FieldType,
@@ -18,6 +19,11 @@ def _normalized_field(
     name = field.name.strip()
     if remove_label_separator:
         name = name.rstrip(":：").rstrip()
+    # A cosmetically bad key must not sink the whole operation; blank it and
+    # let the schema validator derive one from the name.
+    key = (field.key or "").strip().lower()
+    if not KEY_PATTERN.match(key):
+        key = ""
     if field_type == FieldType.ENUM and not enum_values:
         field_type = FieldType.TEXT
         enum_values = None
@@ -25,6 +31,7 @@ def _normalized_field(
         enum_values = None
     return FieldSpec(
         name=name,
+        key=key,
         type=field_type,
         description=field.description,
         enum_values=enum_values,
@@ -90,6 +97,8 @@ def apply_refinement_plan(
             if candidate.name in names:
                 _reject(rejected, operation, "A field with this name already exists.")
                 continue
+            if candidate.key and candidate.key in {field.key for field in fields}:
+                candidate.key = ""
             fields.append(candidate)
             applied.append(f"Added field: {candidate.name}")
             continue

@@ -4,11 +4,13 @@ from ..document import Document
 from ..prompts import LLMSuggestedSchema
 from ..result import ExtractionResult
 from ..schema import (
+    KEY_PATTERN,
     ExtractionSchema,
     FieldSpec,
     FieldType,
     SchemaChatMessage,
     SchemaRefinement,
+    field_key_from_name,
 )
 
 
@@ -57,6 +59,7 @@ def suggested_to_schema(suggested: LLMSuggestedSchema) -> ExtractionSchema:
     """
     fields = []
     seen: set[str] = set()
+    seen_keys: set[str] = set()
     for f in suggested.fields:
         source_label = (f.source_label or "").strip().rstrip(":：").rstrip()
         if source_label and not any(character.isalnum() for character in source_label):
@@ -65,11 +68,23 @@ def suggested_to_schema(suggested: LLMSuggestedSchema) -> ExtractionSchema:
         if not name or name in seen:
             continue
         seen.add(name)
+        # Model-proposed key when it is valid and free; otherwise let the
+        # schema validator derive one from the name.
+        key = (f.key or "").strip().lower()
+        if not KEY_PATTERN.match(key) or key in seen_keys:
+            key = ""
+        if not key:
+            derived = field_key_from_name(name)
+            key = derived if derived and derived not in seen_keys else ""
+        if key:
+            seen_keys.add(key)
         ftype, enum_values = f.type, f.enum_values
         if ftype == FieldType.ENUM and not enum_values:
             ftype, enum_values = FieldType.TEXT, None
         fields.append(
-            FieldSpec(name=name, type=ftype, description=f.description, enum_values=enum_values)
+            FieldSpec(
+                name=name, key=key, type=ftype, description=f.description, enum_values=enum_values
+            )
         )
     return ExtractionSchema(fields=fields)
 

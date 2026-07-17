@@ -3,7 +3,7 @@ import { ArrowLeft, Download, FilePlus2, Settings2, X } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api/client'
-import type { FieldValue, ResultRow } from '../api/types'
+import type { FieldSpec, FieldValue, ResultRow } from '../api/types'
 import { t } from '../i18n'
 import './results.css'
 
@@ -23,7 +23,15 @@ function StatusPill({ row }: { row: ResultRow }) {
   return <span className="pill pill-ready">{t('results.status.ready')}</span>
 }
 
-function Drawer({ row, onClose }: { row: ResultRow; onClose: () => void }) {
+function Drawer({
+  row,
+  fieldByKey,
+  onClose,
+}: {
+  row: ResultRow
+  fieldByKey: Map<string, FieldSpec>
+  onClose: () => void
+}) {
   return (
     <aside className="drawer card">
       <div className="drawer-head">
@@ -37,9 +45,15 @@ function Drawer({ row, onClose }: { row: ResultRow; onClose: () => void }) {
       </div>
       {row.error && <div className="error-note">{row.error}</div>}
       <div className="drawer-fields">
-        {row.values.map((v: FieldValue) => (
+        {row.values.map((v: FieldValue) => {
+          const spec = fieldByKey.get(v.field)
+          return (
           <div key={v.field} className={`drawer-field${v.needs_review ? ' flagged' : ''}`}>
-            <div className="drawer-field-name">{v.field}</div>
+            <div className="drawer-field-name">
+              {spec?.name ?? v.field}
+              <code className="drawer-field-key">{spec?.key ?? v.field}</code>
+            </div>
+            {spec?.description && <div className="drawer-field-desc">{spec.description}</div>}
             <div className="drawer-field-value">
               {v.value ?? '—'}
               {v.currency ? ` ${v.currency}` : ''}
@@ -68,7 +82,8 @@ function Drawer({ row, onClose }: { row: ResultRow; onClose: () => void }) {
               </dd>
             </dl>
           </div>
-        ))}
+          )
+        })}
       </div>
     </aside>
   )
@@ -91,7 +106,12 @@ export default function ResultsPage() {
 
   if (!assistant.data) return <div className="muted">{t('common.loading')}</div>
   const a = assistant.data
-  const fieldNames = a.schema.fields.map((f) => f.name)
+  const schemaFields = a.schema.fields
+  const fieldByKey = new Map<string, FieldSpec>()
+  for (const f of schemaFields) {
+    fieldByKey.set(f.key, f)
+    fieldByKey.set(f.name, f) // results predating field keys stored the name
+  }
   const rows = results.data ?? []
 
   const filters: { key: Filter; label: string; count?: number }[] = [
@@ -152,8 +172,11 @@ export default function ResultsPage() {
             <thead>
               <tr>
                 <th className="col-doc">Document</th>
-                {fieldNames.map((name) => (
-                  <th key={name}>{name}</th>
+                {schemaFields.map((f) => (
+                  <th key={f.key} title={f.description ?? undefined}>
+                    {f.name}
+                    <span className="th-key">{f.key}</span>
+                  </th>
                 ))}
               </tr>
             </thead>
@@ -166,11 +189,12 @@ export default function ResultsPage() {
                       <span className="doc-name">{row.filename}</span>
                       <StatusPill row={row} />
                     </td>
-                    {fieldNames.map((name) => {
-                      const v = byField.get(name)
+                    {schemaFields.map((f) => {
+                      // results predating field keys stored the name in `field`
+                      const v = byField.get(f.key) ?? byField.get(f.name)
                       const flagged = v?.needs_review
                       return (
-                        <td key={name} className={flagged ? 'flagged' : ''}>
+                        <td key={f.key} className={flagged ? 'flagged' : ''}>
                           {v?.value ?? '—'}
                           {v?.currency ? ` ${v.currency}` : ''}
                         </td>
@@ -184,7 +208,9 @@ export default function ResultsPage() {
         </div>
       )}
 
-      {selected && <Drawer row={selected} onClose={() => setSelected(null)} />}
+      {selected && (
+        <Drawer row={selected} fieldByKey={fieldByKey} onClose={() => setSelected(null)} />
+      )}
     </>
   )
 }
