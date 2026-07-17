@@ -3,7 +3,7 @@ import { FileSearch2, LayoutGrid } from 'lucide-react'
 import { BrowserRouter, NavLink, Route, Routes } from 'react-router-dom'
 import './app.css'
 import { t } from './i18n'
-import AssistantsPage from './pages/AssistantsPage'
+import AgentsPage from './pages/AgentsPage'
 import BuildWizard from './pages/BuildWizard'
 import ResultsPage from './pages/ResultsPage'
 
@@ -26,10 +26,10 @@ function Sidebar() {
       <nav className="sidebar-nav">
         <NavLink to="/" end className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
           <LayoutGrid size={17} />
-          {t('nav.assistants')}
+          {t('nav.agents')}
         </NavLink>
       </nav>
-      <div className="sidebar-foot">v0.1 · docstill engine</div>
+      <div className="sidebar-foot">v0.1 · IntelliDocPro</div>
     </aside>
   )
 }
@@ -42,10 +42,10 @@ export default function App() {
           <Sidebar />
           <main className="main">
             <Routes>
-              <Route path="/" element={<AssistantsPage />} />
+              <Route path="/" element={<AgentsPage />} />
               <Route path="/build" element={<BuildWizard />} />
-              <Route path="/build/:assistantId" element={<BuildWizard />} />
-              <Route path="/results/:assistantId" element={<ResultsPage />} />
+              <Route path="/build/:agentId" element={<BuildWizard />} />
+              <Route path="/results/:agentId" element={<ResultsPage />} />
             </Routes>
           </main>
         </div>

@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "api",
-      "runtimeExecutable": "docstill/.venv/bin/python",
-      "runtimeArgs": ["-m", "uvicorn", "server.app:app", "--app-dir", "docstill", "--port", "8000"],
+      "runtimeExecutable": "backend/.venv/bin/python",
+      "runtimeArgs": ["-m", "uvicorn", "server.app:app", "--app-dir", "backend", "--port", "8000"],
       "port": 8000
     },
     {

@@ -388,13 +388,13 @@ const BULK_ICON: Record<BulkFileStatus, React.ReactNode> = {
   failed: <XCircle size={15} style={{ color: 'var(--bad)' }} />,
 }
 
-function BulkStep({ assistantId }: { assistantId: string }) {
+function BulkStep({ agentId }: { agentId: string }) {
   const navigate = useNavigate()
   const [picked, setPicked] = useState<File[]>([])
   const [jobId, setJobId] = useState<string | null>(null)
 
   const start = useMutation({
-    mutationFn: () => api.startAssistantBulk(assistantId, picked),
+    mutationFn: () => api.startAgentBulk(agentId, picked),
     onSuccess: (r) => setJobId(r.job_id),
   })
 
@@ -476,7 +476,7 @@ function BulkStep({ assistantId }: { assistantId: string }) {
         ))}
       </div>
       {done && (
-        <button className="btn btn-primary" onClick={() => navigate(`/results/${assistantId}`)}>
+        <button className="btn btn-primary" onClick={() => navigate(`/results/${agentId}`)}>
           {t('bulk.toResults')}
           <ArrowRight size={16} />
         </button>
@@ -489,11 +489,11 @@ function BulkStep({ assistantId }: { assistantId: string }) {
 
 export default function BuildWizard() {
   const navigate = useNavigate()
-  const { assistantId: routeId } = useParams()
+  const { agentId: routeId } = useParams()
   const [searchParams] = useSearchParams()
 
   const [step, setStep] = useState(routeId ? Number(searchParams.get('step') ?? 2) : 1)
-  const [assistantId, setAssistantId] = useState<string | null>(routeId ?? null)
+  const [agentId, setAgentId] = useState<string | null>(routeId ?? null)
   const [name, setName] = useState('')
   const [engine, setEngine] = useState('openai')
   const [model, setModel] = useState('')
@@ -507,7 +507,7 @@ export default function BuildWizard() {
   const [testResult, setTestResult] = useState<ExtractionResult | null>(null)
   const [highlight, setHighlight] = useState<Highlight | null>(null)
   const [fallbackNote, setFallbackNote] = useState<string | null>(null)
-  const hydratedAssistantId = useRef<string | null>(null)
+  const hydratedAgentId = useRef<string | null>(null)
   const requestCounter = useRef(0)
   const refineStateRef = useRef(refineState)
   const fields = refineState.fields
@@ -535,19 +535,19 @@ export default function BuildWizard() {
     clearTestContext()
   }
 
-  // edit mode: hydrate from the stored assistant
+  // edit mode: hydrate from the stored Document Agent
   const [persistedKeys, setPersistedKeys] = useState<Set<string>>(new Set())
   const lockKeys = (locked: FieldSpec[]) =>
     setPersistedKeys(new Set(locked.map((f) => f.key).filter(Boolean)))
 
   const existing = useQuery({
-    queryKey: ['assistant', routeId],
-    queryFn: () => api.getAssistant(routeId!),
+    queryKey: ['agent', routeId],
+    queryFn: () => api.getAgent(routeId!),
     enabled: !!routeId,
   })
   useEffect(() => {
-    if (existing.data && hydratedAssistantId.current !== existing.data.id) {
-      hydratedAssistantId.current = existing.data.id
+    if (existing.data && hydratedAgentId.current !== existing.data.id) {
+      hydratedAgentId.current = existing.data.id
       setName(existing.data.name)
       setEngine(existing.data.engine)
       setModel(existing.data.model ?? '')
@@ -565,44 +565,44 @@ export default function BuildWizard() {
   const suggest = useMutation({
     mutationFn: async (file: File) => {
       const schema = await api.suggestSchema(file, engine, model || null)
-      const assistant = await api.createAssistant({
+      const agent = await api.createAgent({
         name: name.trim() || file.name.replace(/\.[^.]+$/, ''),
         engine,
         model: model || null,
         schema,
       })
-      // best-effort: a failed sample upload must not break assistant creation
-      await api.uploadSample(assistant.id, file).catch(() => {})
-      return assistant
+      // best-effort: a failed sample upload must not break agent creation
+      await api.uploadSample(agent.id, file).catch(() => {})
+      return agent
     },
-    onSuccess: (assistant) => {
-      setAssistantId(assistant.id)
-      setName(assistant.name)
-      dispatchRefine({ type: 'hydrate', fields: assistant.schema.fields })
-      lockKeys(assistant.schema.fields)
+    onSuccess: (agent) => {
+      setAgentId(agent.id)
+      setName(agent.name)
+      dispatchRefine({ type: 'hydrate', fields: agent.schema.fields })
+      lockKeys(agent.schema.fields)
       setStep(2)
     },
   })
 
   const skipManual = useMutation({
     mutationFn: () =>
-      api.createAssistant({
+      api.createAgent({
         name: name.trim() || t('wizard.title.new'),
         engine,
         model: model || null,
         schema: { fields: [{ name: 'Field 1', key: 'field_1', type: 'text' }] },
       }),
-    onSuccess: (assistant) => {
-      setAssistantId(assistant.id)
-      setName(assistant.name)
-      dispatchRefine({ type: 'hydrate', fields: assistant.schema.fields })
-      lockKeys(assistant.schema.fields)
+    onSuccess: (agent) => {
+      setAgentId(agent.id)
+      setName(agent.name)
+      dispatchRefine({ type: 'hydrate', fields: agent.schema.fields })
+      lockKeys(agent.schema.fields)
       setStep(2)
     },
   })
 
-  const updateAssistant = () =>
-    api.updateAssistant(assistantId!, {
+  const updateAgent = () =>
+    api.updateAgent(agentId!, {
       name,
       engine,
       model: model || null,
@@ -610,12 +610,12 @@ export default function BuildWizard() {
     })
 
   const saveSchema = useMutation({
-    mutationFn: updateAssistant,
+    mutationFn: updateAgent,
     onSuccess: () => lockKeys(fields),
   })
 
   const saveAndContinue = useMutation({
-    mutationFn: updateAssistant,
+    mutationFn: updateAgent,
     onSuccess: () => {
       lockKeys(fields)
       setStep(3)
@@ -733,7 +733,7 @@ export default function BuildWizard() {
         <div>
           <button className="back-link" onClick={() => navigate('/')}>
             <ArrowLeft size={14} />
-            {t('nav.assistants')}
+            {t('nav.agents')}
           </button>
           <h1>
             <input
@@ -805,7 +805,7 @@ export default function BuildWizard() {
           <div className="fields-pane">
             <div className="fields-head">
               <h3>{t('fields.title')}</h3>
-              <span className="muted">{fields.length}</span>
+              <span className="fields-count">{fields.length}</span>
             </div>
             <EngineModelPicker
               engine={engine}
@@ -931,7 +931,7 @@ export default function BuildWizard() {
                   buttonLabel={t('fields.sample.button')}
                   onFiles={(files) => {
                     handleSampleFile(files[0])
-                    if (assistantId) api.uploadSample(assistantId, files[0]).catch(() => {})
+                    if (agentId) api.uploadSample(agentId, files[0]).catch(() => {})
                   }}
                 />
               </div>
@@ -940,7 +940,7 @@ export default function BuildWizard() {
         </div>
       )}
 
-      {step === 3 && assistantId && <BulkStep assistantId={assistantId} />}
+      {step === 3 && agentId && <BulkStep agentId={agentId} />}
     </>
   )
 }

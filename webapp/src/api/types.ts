@@ -1,4 +1,4 @@
-// Mirrors of the docstill pydantic models (src/docstill/*.py).
+// Mirrors of the intellidocpro pydantic models (src/intellidocpro/*.py).
 
 export type FieldType = 'text' | 'number' | 'date' | 'amount' | 'percent' | 'enum'
 export type Confidence = 'high' | 'medium' | 'low'
@@ -57,7 +57,7 @@ export interface ExtractionResult {
   usage: Record<string, number>
 }
 
-export interface Assistant {
+export interface DocumentAgent {
   id: string
   name: string
   description: string
@@ -109,7 +109,7 @@ export interface BulkReport {
 export interface ResultRow {
   id: string
   run_id: string
-  assistant_id: string
+  agent_id: string
   document_id: string | null
   filename: string
   status: 'done' | 'failed'

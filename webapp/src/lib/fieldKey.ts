@@ -1,4 +1,4 @@
-// Mirrors docstill.schema.field_key_from_name / KEY_PATTERN.
+// Mirrors intellidocpro.schema.field_key_from_name / KEY_PATTERN.
 
 export const FIELD_KEY_RE = /^[a-z][a-z0-9_]{0,63}$/
 

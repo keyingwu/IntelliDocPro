@@ -164,22 +164,22 @@ function Drawer({
 }
 
 export default function ResultsPage() {
-  const { assistantId } = useParams()
+  const { agentId } = useParams()
   const navigate = useNavigate()
   const [filter, setFilter] = useState<Filter>('all')
   const [selected, setSelected] = useState<ResultRow | null>(null)
 
-  const assistant = useQuery({
-    queryKey: ['assistant', assistantId],
-    queryFn: () => api.getAssistant(assistantId!),
+  const agent = useQuery({
+    queryKey: ['agent', agentId],
+    queryFn: () => api.getAgent(agentId!),
   })
   const results = useQuery({
-    queryKey: ['results', assistantId, filter],
-    queryFn: () => api.listResults(assistantId!, filter),
+    queryKey: ['results', agentId, filter],
+    queryFn: () => api.listResults(agentId!, filter),
   })
 
-  if (!assistant.data) return <div className="muted">{t('common.loading')}</div>
-  const a = assistant.data
+  if (!agent.data) return <div className="muted">{t('common.loading')}</div>
+  const a = agent.data
   const schemaFields = a.schema.fields
   const fieldByKey = new Map<string, FieldSpec>()
   for (const f of schemaFields) {
@@ -200,7 +200,7 @@ export default function ResultsPage() {
         <div>
           <button className="back-link" onClick={() => navigate('/')}>
             <ArrowLeft size={14} />
-            {t('nav.assistants')}
+            {t('nav.agents')}
           </button>
           <h1>{a.name}</h1>
           <div className="sub">

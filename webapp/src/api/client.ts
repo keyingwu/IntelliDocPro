@@ -1,5 +1,5 @@
 import type {
-  Assistant,
+  DocumentAgent,
   BulkReport,
   ExtractionResult,
   ExtractionSchema,
@@ -42,18 +42,18 @@ export const api = {
   health: () => request<Health>('/health'),
   models: () => request<ModelsResponse>('/models'),
 
-  listAssistants: () => request<Assistant[]>('/assistants'),
-  getAssistant: (id: string) => request<Assistant>(`/assistants/${id}`),
-  createAssistant: (body: {
+  listAgents: () => request<DocumentAgent[]>('/agents'),
+  getAgent: (id: string) => request<DocumentAgent>(`/agents/${id}`),
+  createAgent: (body: {
     name: string
     description?: string
     engine: string
     model?: string | null
     schema: ExtractionSchema
-  }) => request<Assistant>('/assistants', json(body)),
-  updateAssistant: (id: string, body: Partial<{ name: string; description: string; engine: string; model: string | null; schema: ExtractionSchema }>) =>
-    request<Assistant>(`/assistants/${id}`, json(body, 'PUT')),
-  deleteAssistant: (id: string) => request<void>(`/assistants/${id}`, { method: 'DELETE' }),
+  }) => request<DocumentAgent>('/agents', json(body)),
+  updateAgent: (id: string, body: Partial<{ name: string; description: string; engine: string; model: string | null; schema: ExtractionSchema }>) =>
+    request<DocumentAgent>(`/agents/${id}`, json(body, 'PUT')),
+  deleteAgent: (id: string) => request<void>(`/agents/${id}`, { method: 'DELETE' }),
 
   suggestSchema: (file: File, engine: string, model?: string | null) => {
     const form = new FormData()
@@ -90,29 +90,29 @@ export const api = {
     return request<ExtractionResult>('/extract', { method: 'POST', body: form })
   },
 
-  startAssistantBulk: (assistantId: string, files: File[]) => {
+  startAgentBulk: (agentId: string, files: File[]) => {
     const form = new FormData()
     for (const file of files) form.append('files', file)
-    return request<{ job_id: string; total: number }>(`/assistants/${assistantId}/bulk`, {
+    return request<{ job_id: string; total: number }>(`/agents/${agentId}/bulk`, {
       method: 'POST',
       body: form,
     })
   },
   bulkStatus: (jobId: string) => request<BulkReport>(`/bulk/${jobId}`),
 
-  listResults: (assistantId: string, filter: 'all' | 'review' | 'ready') =>
-    request<ResultRow[]>(`/assistants/${assistantId}/results?filter=${filter}`),
+  listResults: (agentId: string, filter: 'all' | 'review' | 'ready') =>
+    request<ResultRow[]>(`/agents/${agentId}/results?filter=${filter}`),
 
-  exportUrl: (assistantId: string) => `/assistants/${assistantId}/export.xlsx`,
+  exportUrl: (agentId: string) => `/agents/${agentId}/export.xlsx`,
 
-  uploadSample: (assistantId: string, file: File) => {
+  uploadSample: (agentId: string, file: File) => {
     const form = new FormData()
     form.append('file', file)
-    return request<Assistant>(`/assistants/${assistantId}/sample`, { method: 'PUT', body: form })
+    return request<DocumentAgent>(`/agents/${agentId}/sample`, { method: 'PUT', body: form })
   },
   documentUrl: (documentId: string) => `/documents/${documentId}`,
   /** Rebuild a File from a stored document so the wizard preview and AI
-   *  refinement work when an assistant is reopened later. */
+   *  refinement work when an agent is reopened later. */
   fetchDocument: async (documentId: string): Promise<File> => {
     const resp = await fetch(`/documents/${documentId}`)
     if (!resp.ok) throw new ApiError(resp.status, resp.statusText)
