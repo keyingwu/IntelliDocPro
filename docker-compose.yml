@@ -1,0 +1,24 @@
+services:
+  intellidocpro:
+    build: .
+    image: intellidocpro
+    ports:
+      - "8000:8000"
+    # 凭据两种给法, 可并用; 同名时宿主机环境变量优先:
+    #   1. backend/.env 文件 (cp backend/.env.example backend/.env 后填 key)
+    #   2. 宿主机环境变量 (export OPENAI_API_KEY=... 后 docker compose up)
+    env_file:
+      - path: backend/.env
+        required: false
+    environment:
+      - ANTHROPIC_API_KEY
+      - OPENAI_API_KEY
+      - AZURE_OPENAI_ENDPOINT
+      - AZURE_OPENAI_API_KEY
+      - AZURE_OPENAI_DEPLOYMENT
+    volumes:
+      - intellidocpro-data:/data
+    restart: unless-stopped
+
+volumes:
+  intellidocpro-data:

@@ -11,6 +11,24 @@ docs/       设计文档
 
 ## 快速开始
 
+### Docker 一键起 (推荐)
+
+```bash
+# 方式 A: 直接跑发布镜像 (数据落在 intellidocpro-data 卷里)
+docker run -p 8000:8000 -e OPENAI_API_KEY=sk-... \
+  -v intellidocpro-data:/data ghcr.io/keyingwu/intellidocpro
+# 打开 http://localhost:8000
+
+# 方式 B: 本地构建 + docker compose
+cp backend/.env.example backend/.env   # 填入至少一家引擎的 key, 不用的引擎整段删掉
+docker compose up --build
+```
+
+引擎 key 也可以直接用宿主机环境变量传 (`export OPENAI_API_KEY=...` 后再
+`docker compose up`), 同名时环境变量优先于 `backend/.env`。
+
+### 源码开发模式
+
 ```bash
 # 1. 后端 (Python >= 3.10, 用 uv)
 cd backend

@@ -1,0 +1,18 @@
+.git
+.github
+docs
+IntelliDocPro-standalone.html
+
+# local environments and secrets (keys are passed at runtime, never baked in)
+backend/.venv
+backend/.env
+
+# local data and caches
+backend/server/data.db*
+backend/server/blobs
+**/__pycache__
+**/.pytest_cache
+
+# frontend is built inside the image
+webapp/node_modules
+webapp/dist

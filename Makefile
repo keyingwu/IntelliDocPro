@@ -1,4 +1,7 @@
-.PHONY: server web dev install
+.PHONY: server web dev install docker
+
+docker:
+	docker compose up --build
 
 server:
 	@echo "Starting IntelliDocPro server..."
