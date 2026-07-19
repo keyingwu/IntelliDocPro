@@ -4,9 +4,10 @@ services:
     image: intellidocpro
     ports:
       - "8000:8000"
-    # 凭据两种给法, 可并用; 同名时宿主机环境变量优先:
-    #   1. backend/.env 文件 (cp backend/.env.example backend/.env 后填 key)
-    #   2. 宿主机环境变量 (export OPENAI_API_KEY=... 后 docker compose up)
+    # Two ways to provide credentials, usable together; on conflict the host
+    # environment variable wins:
+    #   1. backend/.env file (cp backend/.env.example backend/.env, then fill in keys)
+    #   2. host environment variables (export OPENAI_API_KEY=... then docker compose up)
     env_file:
       - path: backend/.env
         required: false

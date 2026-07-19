@@ -1,60 +1,62 @@
 # IntelliDocPro
 
-Schema 驱动的文档处理平台。上传样例文档自动推断字段 schema，批量抽取 PDF/图片中的
-结构化数据（值 + 置信度 + 来源定位 + 复核标记），多 LLM 引擎可切换并带成本核算。
+Schema-driven document processing platform. Upload a sample document to auto-infer a
+field schema, then batch-extract structured data from PDFs/images (value + confidence +
+source location + review flag), with switchable LLM engines and per-run cost accounting.
 
 ```
-backend/    Python 包 (可独立复用) + FastAPI 服务 + SQLite 存储
-webapp/     React + Vite + TS 前端 (Document Agent 管理 / 三步向导 / 结果表格 / Excel 导出)
-docs/       设计文档
+backend/    Python package (reusable on its own) + FastAPI service + SQLite storage
+webapp/     React + Vite + TS frontend (Document Agent management / 3-step wizard / results table / Excel export)
+docs/       Design documents
 ```
 
-## 快速开始
+## Quick start
 
-### Docker 一键起 (推荐)
+### Docker (recommended)
 
 ```bash
-# 方式 A: 直接跑发布镜像 (数据落在 intellidocpro-data 卷里)
+# Option A: run the published image (data lives in the intellidocpro-data volume)
 docker run -p 8000:8000 -e OPENAI_API_KEY=sk-... \
   -v intellidocpro-data:/data ghcr.io/keyingwu/intellidocpro
-# 打开 http://localhost:8000
+# open http://localhost:8000
 
-# 方式 B: 本地构建 + docker compose
-cp backend/.env.example backend/.env   # 填入至少一家引擎的 key, 不用的引擎整段删掉
+# Option B: build locally with docker compose
+cp backend/.env.example backend/.env   # fill in a key for at least one engine, delete unused sections
 docker compose up --build
 ```
 
-引擎 key 也可以直接用宿主机环境变量传 (`export OPENAI_API_KEY=...` 后再
-`docker compose up`), 同名时环境变量优先于 `backend/.env`。
+Engine keys can also be passed as host environment variables
+(`export OPENAI_API_KEY=...` before `docker compose up`); when both are set,
+the environment variable wins over `backend/.env`.
 
-### 源码开发模式
+### Development from source
 
 ```bash
-# 1. 后端 (Python >= 3.10, 用 uv)
+# 1. Backend (Python >= 3.10, using uv)
 cd backend
 uv venv .venv && source .venv/bin/activate
 uv pip install -e ".[dev]"
-cp .env.example .env    # 填入至少一家引擎的 key
+cp .env.example .env    # fill in a key for at least one engine
 
-# 2. 前端
+# 2. Frontend
 cd ../webapp && npm install
 
-# 3. 开发模式 (两个终端)
+# 3. Dev mode (two terminals)
 cd backend && .venv/bin/python -m uvicorn server.app:app --port 8000
 cd webapp && npm run dev          # http://localhost:5173
 
-# 或生产模式 (单进程): 构建后 FastAPI 直接托管前端
+# Or production mode (single process): after building, FastAPI serves the frontend
 cd webapp && npm run build
 cd ../backend && .venv/bin/python -m uvicorn server.app:app --port 8000
-# 打开 http://localhost:8000
+# open http://localhost:8000
 ```
 
-## 测试
+## Tests
 
 ```bash
 cd backend
-.venv/bin/python -m pytest                    # 单元 + 服务测试, 无需网络
-.venv/bin/python -m pytest tests/integration  # 真实 API 端到端, 按 key 自动跳过
+.venv/bin/python -m pytest                    # unit + service tests, no network needed
+.venv/bin/python -m pytest tests/integration  # real API end-to-end, skipped per missing key
 ```
 
-引擎与库的用法详见 [backend/README.md](backend/README.md)。
+See [backend/README.md](backend/README.md) for engine and library usage.
